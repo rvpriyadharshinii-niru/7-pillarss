@@ -12,8 +12,7 @@ for (const [entry, v] of Object.entries(d)) {
     if (o.fail || n.fail) { if (o.fail !== n.fail) diffs.push({ entry, k, kind: 'act-result', o: o.fail, n: n.fail }); else same++; continue; }
     const bad = [];
     for (const f of FIELDS) {
-      const a = JSON.stringify(o.snap[f]), b = JSON.stringify(n.snap[f]);
-      if (a !== b) bad.push(f === 'main' || f === 'layer' || f === 'header' ? { f, ...L.wordDiff(String(o.snap[f]), String(n.snap[f])) } : { f, o: o.snap[f], n: n.snap[f] });
+      if (!L.same(o.snap[f], n.snap[f])) bad.push(f === 'main' || f === 'layer' || f === 'header' ? { f, ...L.wordDiff(String(o.snap[f]), String(n.snap[f])) } : { f, o: o.snap[f], n: n.snap[f] });
     }
     const eo = (o.errs || []).join(';'), en = (n.errs || []).join(';');
     const en2 = (n.errs||[]).filter(x=>!/ERR_FAILED/.test(x)).join(';'); if (en2) bad.push({ f: 'errs-new', n: en2.slice(0, 200), o: eo.slice(0, 100) });

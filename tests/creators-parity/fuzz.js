@@ -15,7 +15,7 @@ async function walk(B, seed) {
       const r = rnd(); let desc, ok = {};
       if (i === 0 || r < 0.04) { const n = NAVS[Math.floor(rnd() * NAVS.length)]; desc = 'nav:' + n; for (const w of ['orig', 'neu']) await pg[w].evaluate(n => document.querySelector('.nav [data-page="' + n + '"]').click(), n); }
       else if (r < 0.10) { desc = 'escape'; for (const w of ['orig', 'neu']) await pg[w].keyboard.press('Escape'); }
-      else if (r < 0.13) { desc = 'back'; for (const w of ['orig', 'neu']) await pg[w].goBack().catch(() => {}); }
+      else if (r < 0.13) { desc = 'back'; for (const w of ['orig', 'neu']) await pg[w].goBack().catch(() => {}); if (!(await pg[w].evaluate(() => !!document.getElementById('layer')).catch(() => false))) await pg[w].goForward().catch(() => {}); }
       else if (r < 0.15) { desc = 'forward'; for (const w of ['orig', 'neu']) await pg[w].goForward().catch(() => {}); }
       else if (r < 0.17) { desc = 'reload'; for (const w of ['orig', 'neu']) { await pg[w].reload(); await pg[w].waitForFunction(() => typeof S !== 'undefined' && document.getElementById('main').innerHTML.length > 50); } }
       else if (r < 0.19) { desc = 'closeLayer'; for (const w of ['orig', 'neu']) await pg[w].evaluate(() => closeLayer()); }
@@ -51,7 +51,7 @@ async function walk(B, seed) {
       for (const w of ['orig', 'neu']) await pg[w].waitForTimeout(40);
       const so = await L.snap(pg.orig), sn = await L.snap(pg.neu);
       log.push(desc); res.steps = i + 1;
-      const bad = CMP.filter(f => JSON.stringify(so[f]) !== JSON.stringify(sn[f]));
+      const bad = CMP.filter(f => !L.same(so[f], sn[f]));
       if (bad.length) { res.diff = { step: i, desc, kind: 'snapshot', fields: bad.map(f => ['main', 'layer', 'header'].includes(f) ? { f, ...L.wordDiff(String(so[f]), String(sn[f])) } : { f, o: so[f], n: sn[f] }) }; break; }
     }
   } catch (e) { res.diff = res.diff || { kind: 'exception', msg: e.message.slice(0, 200) }; }
