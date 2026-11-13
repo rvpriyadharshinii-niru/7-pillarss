@@ -77377,7 +77377,7 @@ svg [fill="#1e40af"]{fill:var(--primary)}
 .dk-widgets{margin-top:0!important}
 .dw-cell>.tv{display:flex;flex-direction:column}
 .dw-cell>.tv .tv-side{margin-top:auto}
-.dw-cell>.tv .tv-main{flex:0 0 auto}
+.dw-cell>.tv .tv-main{flex:1 1 auto;display:flex;flex-direction:column}
 .dw-cell>.tv>.tv-side{padding-top:16px}
 @media (min-width:1101px){.sv-rows{max-height:210px}}
 
@@ -77420,6 +77420,127 @@ svg [fill="#1e40af"]{fill:var(--primary)}
 
 
 .ds-page .cp-table .ds-sticky-l2{min-width:184px;max-width:184px}
+
+
+/* round 3 */
+.dk-widgets>*,.dk-widgets>.ds-card{margin:0!important}
+.dw-cell>.tv .tv-chart{flex:1 1 auto;display:flex;flex-direction:column;min-height:0}
+.dw-cell>.tv .tv-chart .tv-frame{flex:1 1 auto;height:auto;min-height:240px}
+@media (min-width:1101px){
+  .dk-shell>.dk-main.dw-grid>.dw-cell:has(.dk-sent){align-self:stretch!important}
+}
+.dk-sent{justify-content:center;align-items:flex-start}
+@media (max-width:1200px){.dk-insights .dk-ins-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+
+/* scroll affordance on every scrolling table wrap (right-edge shade appears only while more content is hidden) */
+#main:has(.camp-qa) .ds-table-wrap,#main:has(.dk-shell) .ds-table-wrap{
+  background:linear-gradient(to right,var(--card) 30%,transparent) left center/28px 100% local no-repeat,linear-gradient(to left,var(--card) 30%,transparent) right center/28px 100% local no-repeat,linear-gradient(to right,var(--slate-200),transparent) left center/10px 100% scroll no-repeat,linear-gradient(to left,var(--slate-200),transparent) right center/10px 100% scroll no-repeat}
+.ds-table-wrap{scrollbar-width:thin}
+
+/* campaign overview grid: legacy pins 3 columns with !important, so fill the last row by spanning */
+.cp-ov .dk-ov-item:last-child:nth-child(3n+1){grid-column:1/-1}
+.cp-ov .dk-ov-item:last-child:nth-child(3n+2){grid-column:span 2}
+.cp-ov .dk-ov-item>*{margin-left:8px;margin-right:8px}
+.cp-ov .dk-ov-item:nth-child(3n+1)>*{margin-left:20px}
+.cp-ov .dk-ov-item>.dk-ov-l{margin-top:8px}
+.cp-ov .dk-ov-item>b{margin-bottom:8px}
+.cp-ov .dk-ov-item:nth-child(3n+1){border-left:0}
+
+
+@media (min-width:1101px){
+  .dk-shell>.dk-main.dw-grid>.dw-cell:has(.dk-row2){grid-column:2/4!important}
+  .dk-shell>.dk-main.dw-grid>.dw-cell:has(.dk-sent){grid-column:1/-1!important;grid-row:4;align-self:stretch!important}
+  .dk-shell>.dk-main.dw-grid>.dw-cell:has(.dk-posts){grid-row:5}
+}
+.dk-sent{flex-direction:row!important;align-items:center!important;justify-content:space-between!important;padding:12px 20px!important;gap:16px!important;min-height:0}
+.dk-sent .sent-na{margin-left:auto}
+.dk-sent .dw-head{flex:0 1 auto}
+
+
+/* campaign overview: shared 3-col grid so the rail fills its height */
+@media (min-width:1101px){
+  .dk-shell:has(>.dk-main>.cp-ov){grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:24px!important;align-items:stretch!important}
+  .dk-shell>.dk-main:has(>.cp-ov){display:contents!important}
+  .dk-shell>.dk-main>.cp-ov{grid-column:1/3;grid-row:1;margin:0!important}
+  .dk-shell>.dk-main>.cp-grid{display:contents!important}
+  .dk-shell:has(>.dk-main>.cp-ov)>.dk-widgets{grid-column:3;grid-row:1/3;position:static;display:flex;flex-direction:column;gap:24px}
+  .dk-shell:has(>.dk-main>.cp-ov)>.dk-widgets>*{flex:1 1 auto}
+  .cp-grid>.dw-cell:has(>.tv--split:not(.dk-trend)){grid-column:1;grid-row:2}
+  .cp-grid>.dw-cell:has(>.dk-trend){grid-column:2;grid-row:2}
+  .cp-grid>.dw-cell:has(.sent-na){grid-column:1/-1!important;grid-row:3}
+  .cp-grid>.dw-cell:has(.dk-cwidget){grid-column:1/-1!important;grid-row:4}
+}
+.dw-cell:has(.sent-na)>.dk-w{flex-direction:row;align-items:center;justify-content:space-between;padding:12px 20px!important;gap:16px}
+.dw-cell:has(.sent-na)>.dk-w .sent-na{flex-direction:row;align-items:baseline;gap:8px;margin-left:auto;padding:0}
+
+
+.dk-shell:has(>.dk-main>.cp-ov)>.dk-widgets>.cov-pipe{flex:0 0 auto}
+
+
+/* draft plans table fits at 1440 */
+.campl .ds-table:not(.cp-table) th,.campl .ds-table:not(.cp-table) td{padding-left:10px!important;padding-right:10px!important}
+.campl .ds-table:not(.cp-table) td:nth-child(2){max-width:250px;min-width:200px}
+.campl .ds-table:not(.cp-table) td:nth-child(2) .ds-table-meta{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.campl .ds-table:not(.cp-table) td:nth-child(3){width:170px;max-width:170px;white-space:normal;line-height:1.35}
+.campl .ds-table:not(.cp-table) td.ds-cb,.campl .ds-table:not(.cp-table) th.ds-cb{width:36px;padding-left:12px!important;padding-right:0!important}
+
+
+/* post details sheet */
+.ps-remove{background:#fff!important;border-color:var(--red-200)!important;color:var(--red-600)!important}
+.ps-remove:hover{background:var(--red-50)!important;border-color:var(--red-300)!important}
+.ps-kvs{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:16px!important}
+.ps-kv{border:0!important;padding:0!important}
+.ps-kvs{border-top:1px solid var(--slate-100);padding-top:12px}
+.ps-sec-h::after,.ps-sec-h hr{display:none}
+.ps-sec{border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xs)}
+
+/* expected outcome: dates + budget scale */
+.oe-m input[type=date]{color-scheme:light;height:36px;min-width:0;width:100%;font-size:13px}
+.oe-m input[type=date]::-webkit-calendar-picker-indicator{opacity:.55;cursor:pointer}
+.oe-dates{flex-direction:column!important;gap:8px!important}
+.oe-dates input{width:100%}
+.oe-sum>.oe-box:first-child .oe-metrics{grid-template-columns:minmax(0,1fr) minmax(0,1.6fr) minmax(0,1fr)!important}
+.oe-sum{grid-template-columns:minmax(0,1.25fr) minmax(0,1fr)!important}
+.oe-ppc input{height:36px;width:80px!important}
+.oe-util:nth-of-type(2){font-size:12px;margin-top:2px}
+.oe-util:last-of-type span:first-child{display:none}
+.oe-util:last-of-type{justify-content:flex-end;font-size:12px}
+.oe-util:last-of-type span:last-child{color:var(--red-700)!important;font-weight:500}
+
+
+/* round-3 minors */
+#main:has(.camp-qa) .ds-table th .my-th>svg{display:none!important}
+.dk-ctools .dk-search{min-width:200px!important;flex:1 1 200px}
+.dk-ctools .ds-filter{padding-left:10px;padding-right:10px}
+.campl .ds-table-wrap{min-height:0!important;height:auto!important}
+.cp-table tbody tr:last-child td{border-bottom:1px solid var(--slate-100)}
+.tg-cell{width:240px;max-width:240px;min-height:56px;align-content:center}
+.tg-in{border:1px solid transparent!important;background:transparent!important;box-shadow:none!important;height:24px;padding:0 6px;font-size:12px;border-radius:var(--r-sm)}
+.tg-in:hover{border-color:var(--border)!important}
+.tg-in:focus{border-color:var(--ring)!important;background:#fff!important}
+.tg-chip{min-width:0}
+
+
+.dk-ctools .dk-search{flex:1 1 260px;max-width:320px}
+.dk-ctools>.ds-spacer{flex:1 0 100%;height:0;min-height:0}
+.dk-ctools>.disc-cols-wrap{margin-left:auto}
+
+
+.dk-ctools .dk-search{flex:0 1 186px!important;min-width:150px!important;max-width:186px}
+.dk-ctools .dk-search input{font-size:13px;padding-left:10px;padding-right:6px}
+.dk-ctools>.ds-spacer{flex:1 1 0;height:auto}
+
+
+.dk-ctools>.ds-spacer{display:none}
+.dk-ctools .dk-search{flex:1 1 200px!important;min-width:150px!important;max-width:240px}
+.dk-ctools{gap:8px 6px}
+.dk-ctools .ds-filter{padding-left:8px;padding-right:8px}
+.dk-ctools .ds-filter .ds-filter-x{margin-left:2px}
+
+
+.dk-ctools .dk-search{flex:0 0 192px!important;min-width:0!important;max-width:192px}
+.dk-ctools .dk-search input{padding-left:8px;padding-right:4px;text-overflow:clip}
+.dk-ctools>.ds-btn--primary{padding:0 12px}
 
 }
 
@@ -77495,6 +77616,27 @@ svg [fill="#1e40af"]{fill:var(--primary)}
 @layer area{
 .col-grid{align-items:stretch}
 .col-tier .ds-table-meta{white-space:normal;line-height:1.4}
+}
+@layer area{
+.col-bar+.ds-table-wrap td.col-note{width:200px;min-width:200px !important;max-width:200px !important;display:table-cell;overflow:hidden;text-overflow:ellipsis;white-space:nowrap !important}
+.col-bar+.ds-table-wrap .col-tier .ds-table-meta{white-space:nowrap !important;overflow:hidden;text-overflow:ellipsis;max-width:160px}
+.col-bar+.ds-table-wrap .col-tier{min-width:140px !important;max-width:160px}
+}
+@layer area{
+.col-bar+.ds-table-wrap .ds-table{table-layout:auto !important;width:max-content !important;min-width:100%}
+.col-bar+.ds-table-wrap td.col-note{width:160px;min-width:160px !important;max-width:160px !important}
+}
+@layer area{
+.col-bar+.ds-table-wrap td.col-note{width:110px;min-width:110px !important;max-width:110px !important}
+.col-bar+.ds-table-wrap .col-tier{min-width:120px !important;max-width:130px}
+.col-bar+.ds-table-wrap .col-tier .ds-table-meta{max-width:130px}
+.col-bar+.ds-table-wrap td,.col-bar+.ds-table-wrap th{padding-left:10px !important;padding-right:10px !important}
+.col-bar+.ds-table-wrap .col-acts{gap:4px}
+}
+@layer area{
+.col-bar+.ds-table-wrap td.col-note{width:96px;min-width:96px !important;max-width:96px !important}
+.col-bar+.ds-table-wrap .col-tier{min-width:150px !important;max-width:150px}
+.col-bar+.ds-table-wrap .col-tier .ds-table-meta{max-width:150px}
 }
 
 @layer area{
@@ -77757,6 +77899,23 @@ button.msd-camp:hover span:first-child{color:var(--primary)}
 .ds-page .ds-table thead th.ds-sticky-r,.ds-page .my-table thead th.my-act-th{box-shadow:-10px 0 0 0 var(--slate-50),-11px 0 0 0 var(--border)}
 .ds-page .ds-table td.ds-sticky-r,.ds-page .my-table td.my-act{z-index:6}
 .ds-page .ds-table th.ds-sticky-r,.ds-page .my-table th.my-act-th{z-index:7}
+/* ── Round 2 ────────────────────────────────────────────────────────────── */
+/* Narrow screens: no sticky columns, the table scrolls as one region so every column is reachable */
+@media (max-width:700px){
+  .ds-page .my-table thead th,.ds-page .my-table tbody td,.ds-page .ds-table th,.ds-page .ds-table td{position:static!important;box-shadow:none!important}
+  .ds-page .my-table td.my-act,.ds-page .my-table th.my-act-th,.ds-page .ds-table td.ds-sticky-r,.ds-page .ds-table th.ds-sticky-r{border-left:0}
+}
+/* Numeric input cells align with their right-aligned header */
+.ds-page td.ds-num .ds-cell-num{display:block;width:100%;min-width:72px;box-sizing:border-box;padding:0 0 0 8px;text-align:right}
+.ds-page td.ds-num .ds-cell-num:hover,.ds-page td.ds-num .ds-cell-num:focus{padding-right:8px}
+/* Empty table: header hidden, message centred with an icon, pager hidden */
+.ds-page table:has(td.ds-empty){display:block;min-width:0;width:100%}
+.ds-page table:has(td.ds-empty) thead{display:none}
+.ds-page table:has(td.ds-empty) tbody,.ds-page table:has(td.ds-empty) tr{display:block;width:100%}
+.ds-page table:has(td.ds-empty) td.ds-empty{display:flex;position:static;width:100%}
+.ds-page td.ds-empty,.ds-page div.ds-empty{display:flex;flex-direction:column;align-items:center;gap:12px;padding:48px 24px;text-align:center;color:var(--muted-foreground);font-size:14px}
+.ds-page td.ds-empty::before,.ds-page div.ds-empty::before{content:"";width:40px;height:40px;background:var(--slate-300);-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") center/contain no-repeat}
+.ds-page .ds-table-wrap:has(td.ds-empty)+.ds-pager,.ds-page .my-wrap:has(td.ds-empty)+.ds-pager{display:none}
 }
 
 @layer area{
@@ -77968,6 +78127,37 @@ button.msd-camp:hover span:first-child{color:var(--primary)}
 #main .post-media{aspect-ratio:1/1!important;max-height:none!important;height:auto!important}
 #main .post-media:has(.play)::before{display:none}
 #main .post-media .media{position:absolute;inset:0}
+}
+@layer area{
+/* round 3 */
+.ds-dh-tabs{border-bottom:0}
+.ds-dh-tabrow{border-bottom:1px solid var(--border);flex-wrap:nowrap}
+.ds-dh-chip{height:36px;padding:0 12px;font-size:13px}
+.ds-dh-back,.ds-dh-icon{width:36px;height:36px}
+.ds-dh-actions{align-items:center}
+.ds-dh-tabrow .ds-viewseg{margin-left:auto;flex:none}
+#main .verdict.is-active{background:var(--background)}
+#main .verdict.is-active .verdict-foot{background:var(--slate-50);border-top-color:var(--border)}
+#main .report-body .between{align-items:flex-start}
+#main .report-body .between .chip{margin-top:2px}
+#main .toolbar select.field,#main .toolbar .field{color:var(--foreground)}
+#main .toolbar .search{flex:1 1 180px;min-width:160px}
+#main .toolbar .view{margin-left:auto}
+#main .toolbar select.field{flex:0 1 auto;min-width:0}
+}
+@layer area{
+.ds-dh-tabrow{border-bottom:0!important}
+.header:has(.ds-dh){padding-bottom:0!important}
+.ds-dh-tabrow:not(:has(.ds-dh-tabs)){justify-content:flex-end;padding:8px 0}
+#main .toolbar .search{flex:1 1 160px;min-width:140px}
+#main .toolbar select.field{width:auto;min-width:110px}
+}
+@layer area{
+#main .toolbar select.field{width:128px!important;flex:0 1 128px}
+}
+@layer area{
+#main .toolbar{gap:8px!important}
+@media (max-width:1000px){#main .report-layout{grid-template-columns:minmax(0,1fr)}#main .report-nav{display:none}}
 }
 
 @layer area{
@@ -78285,6 +78475,19 @@ button.msd-camp:hover span:first-child{color:var(--primary)}
 .ac-foot>.ac-spacer{display:none}
 .ac-foot>.ds-table-meta{margin-left:auto}
 .ac-foot>span{min-width:0}
+}
+@layer area{
+@media (max-width:640px){
+  .ac-card .ac-levels{overflow-x:auto;scroll-snap-type:x proximity}
+  .ac-card .ac-tab{flex:0 0 200px;scroll-snap-align:start}
+  .ac-card .ac-tab-tx b{overflow:visible;text-overflow:clip}
+  .ac-card .ac-bar--top{flex-wrap:wrap}
+  .ac-card .ac-bar--top>.ac-btn--view{flex:1 1 auto;min-width:0}
+  .ac-card .ac-bar--top>.ac-btn--stack{flex:1 1 100%;order:5;max-width:none}
+  .ac-card .ac-bar--top>.ac-spacer{display:none}
+  .ac-card .ac-bar--top>.ac-btn--icon,.ac-card .ac-bar--top>.ac-btn--outline{order:1}
+  .ac-card .ac-bar--sub>.ac-btn:first-of-type{margin-left:0}
+}
 }
 
 @layer chrome {
@@ -81783,8 +81986,8 @@ function addCreatorsHTML(){
         ${csv?addcPreviewHTML(csv):''}
         <details class="addn-help"><summary>How importing works</summary><ul><li>Put the creators in a table in the doc, one Instagram handle per row, or one handle per line.</li><li>A header row (handle or username) is skipped.</li><li>Handles already in My creators are not added twice.</li></ul></details></div>`;
   return `<div class="disc-cfg-scrim" onclick="if(event.target===this)addcClose()">
-    <div class="addn" role="dialog" aria-modal="true" aria-label="Add Creators">
-      <div class="addn-head"><div><h3>Add Creators</h3><p>${S.addPlan?'Bring Instagram creators into My Creators and this shortlist.':'Bring Instagram creators into My Creators.'}</p></div><button type="button" class="ds-iconbtn" aria-label="Close" onclick="addcClose()">${X_SVG}</button></div>
+    <div class="addn" role="dialog" aria-modal="true" aria-label="Add creators">
+      <div class="addn-head"><div><h3>Add creators</h3><p>${S.addPlan?'Bring Instagram creators into My Creators and this shortlist.':'Bring Instagram creators into My Creators.'}</p></div><button type="button" class="ds-iconbtn" aria-label="Close" onclick="addcClose()">${X_SVG}</button></div>
       <div class="addn-body">
         <div class="addn-side" role="tablist" aria-label="Add method">${opt('paste',kb,'Paste handles','Type or paste a list')}${opt('file',upl,'Upload CSV','Spreadsheet, one handle per row')}${opt('csv',fi,'Google Doc','Paste a Google Doc link')}
           </div>

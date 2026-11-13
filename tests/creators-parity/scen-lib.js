@@ -15,8 +15,8 @@ function mk(p) {
       const loc = p.locator(scope).locator(sel.map(s => `${s}:visible:has-text(${JSON.stringify(txt)})`).concat([`[aria-label=${JSON.stringify(txt)}]:visible`]).join(', '));
       const n = await loc.count(); if (!n) throw new Error('no clickable with text ' + txt + ' in ' + scope);
       // prefer exact text match
-      let pick = loc.first();
-      for (let i = 0; i < Math.min(n, 30); i++) { const t = L.norm((await loc.nth(i).innerText().catch(() => '')) || (await loc.nth(i).getAttribute('aria-label').catch(() => '')) || ''); if (t === L.norm(txt)) { pick = loc.nth(i); break; } }
+      let pick = loc.first(), best = 1e9;
+      for (let i = 0; i < Math.min(n, 40); i++) { const t = L.norm((await loc.nth(i).innerText().catch(() => '')) || (await loc.nth(i).getAttribute('aria-label').catch(() => '')) || ''); const sc = t === L.norm(txt) ? -1 : t.length; if (sc < best) { best = sc; pick = loc.nth(i); } }
       await pick.click({ timeout: 3000, ...opt }); await sleep(p, 90); return true;
     },
     A: async (aria, i = 0) => { const l = p.locator(`[aria-label=${JSON.stringify(aria)}]:visible`).nth(i); await l.click({ timeout: 3000 }); await sleep(p, 90); },

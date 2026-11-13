@@ -487,18 +487,14 @@ svg [fill="#1e40af"]{fill:var(--primary)}
   background:linear-gradient(to right,var(--card) 30%,transparent) left center/28px 100% local no-repeat,linear-gradient(to left,var(--card) 30%,transparent) right center/28px 100% local no-repeat,linear-gradient(to right,var(--slate-200),transparent) left center/10px 100% scroll no-repeat,linear-gradient(to left,var(--slate-200),transparent) right center/10px 100% scroll no-repeat}
 .ds-table-wrap{scrollbar-width:thin}
 
-/* campaign overview grid: uniform padding, even 4+3 */
-.cp-ov>.dk-ov-row{grid-template-columns:repeat(12,minmax(0,1fr))!important}
-.cp-ov .dk-ov-item{grid-column:span 3!important;border-left:1px solid var(--slate-100)}
-.cp-ov .dk-ov-item:nth-child(n+5){grid-column:span 4!important}
-.cp-ov .dk-ov-item:nth-child(5):nth-last-child(2),.cp-ov .dk-ov-item:nth-child(6):nth-last-child(1){grid-column:span 6!important}
-.cp-ov .dk-ov-item:nth-child(n+5):last-child:nth-child(5){grid-column:1/-1!important}
+/* campaign overview grid: legacy pins 3 columns with !important, so fill the last row by spanning */
+.cp-ov .dk-ov-item:last-child:nth-child(3n+1){grid-column:1/-1}
+.cp-ov .dk-ov-item:last-child:nth-child(3n+2){grid-column:span 2}
 .cp-ov .dk-ov-item>*{margin-left:8px;margin-right:8px}
-.cp-ov .dk-ov-item:nth-child(4n+1)>*{margin-left:20px}
+.cp-ov .dk-ov-item:nth-child(3n+1)>*{margin-left:20px}
 .cp-ov .dk-ov-item>.dk-ov-l{margin-top:8px}
 .cp-ov .dk-ov-item>b{margin-bottom:8px}
-.cp-ov .dk-ov-item:nth-child(4n+1){border-left:0}
-@media (max-width:760px){.cp-ov>.dk-ov-row{grid-template-columns:repeat(2,minmax(0,1fr))!important}.cp-ov .dk-ov-item,.cp-ov .dk-ov-item:nth-child(n+5){grid-column:span 1!important}}
+.cp-ov .dk-ov-item:nth-child(3n+1){border-left:0}
 
 
 @media (min-width:1101px){
@@ -509,5 +505,91 @@ svg [fill="#1e40af"]{fill:var(--primary)}
 .dk-sent{flex-direction:row!important;align-items:center!important;justify-content:space-between!important;padding:12px 20px!important;gap:16px!important;min-height:0}
 .dk-sent .sent-na{margin-left:auto}
 .dk-sent .dw-head{flex:0 1 auto}
+
+
+/* campaign overview: shared 3-col grid so the rail fills its height */
+@media (min-width:1101px){
+  .dk-shell:has(>.dk-main>.cp-ov){grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:24px!important;align-items:stretch!important}
+  .dk-shell>.dk-main:has(>.cp-ov){display:contents!important}
+  .dk-shell>.dk-main>.cp-ov{grid-column:1/3;grid-row:1;margin:0!important}
+  .dk-shell>.dk-main>.cp-grid{display:contents!important}
+  .dk-shell:has(>.dk-main>.cp-ov)>.dk-widgets{grid-column:3;grid-row:1/3;position:static;display:flex;flex-direction:column;gap:24px}
+  .dk-shell:has(>.dk-main>.cp-ov)>.dk-widgets>*{flex:1 1 auto}
+  .cp-grid>.dw-cell:has(>.tv--split:not(.dk-trend)){grid-column:1;grid-row:2}
+  .cp-grid>.dw-cell:has(>.dk-trend){grid-column:2;grid-row:2}
+  .cp-grid>.dw-cell:has(.sent-na){grid-column:1/-1!important;grid-row:3}
+  .cp-grid>.dw-cell:has(.dk-cwidget){grid-column:1/-1!important;grid-row:4}
+}
+.dw-cell:has(.sent-na)>.dk-w{flex-direction:row;align-items:center;justify-content:space-between;padding:12px 20px!important;gap:16px}
+.dw-cell:has(.sent-na)>.dk-w .sent-na{flex-direction:row;align-items:baseline;gap:8px;margin-left:auto;padding:0}
+
+
+.dk-shell:has(>.dk-main>.cp-ov)>.dk-widgets>.cov-pipe{flex:0 0 auto}
+
+
+/* draft plans table fits at 1440 */
+.campl .ds-table:not(.cp-table) th,.campl .ds-table:not(.cp-table) td{padding-left:10px!important;padding-right:10px!important}
+.campl .ds-table:not(.cp-table) td:nth-child(2){max-width:250px;min-width:200px}
+.campl .ds-table:not(.cp-table) td:nth-child(2) .ds-table-meta{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.campl .ds-table:not(.cp-table) td:nth-child(3){width:170px;max-width:170px;white-space:normal;line-height:1.35}
+.campl .ds-table:not(.cp-table) td.ds-cb,.campl .ds-table:not(.cp-table) th.ds-cb{width:36px;padding-left:12px!important;padding-right:0!important}
+
+
+/* post details sheet */
+.ps-remove{background:#fff!important;border-color:var(--red-200)!important;color:var(--red-600)!important}
+.ps-remove:hover{background:var(--red-50)!important;border-color:var(--red-300)!important}
+.ps-kvs{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:16px!important}
+.ps-kv{border:0!important;padding:0!important}
+.ps-kvs{border-top:1px solid var(--slate-100);padding-top:12px}
+.ps-sec-h::after,.ps-sec-h hr{display:none}
+.ps-sec{border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xs)}
+
+/* expected outcome: dates + budget scale */
+.oe-m input[type=date]{color-scheme:light;height:36px;min-width:0;width:100%;font-size:13px}
+.oe-m input[type=date]::-webkit-calendar-picker-indicator{opacity:.55;cursor:pointer}
+.oe-dates{flex-direction:column!important;gap:8px!important}
+.oe-dates input{width:100%}
+.oe-sum>.oe-box:first-child .oe-metrics{grid-template-columns:minmax(0,1fr) minmax(0,1.6fr) minmax(0,1fr)!important}
+.oe-sum{grid-template-columns:minmax(0,1.25fr) minmax(0,1fr)!important}
+.oe-ppc input{height:36px;width:80px!important}
+.oe-util:nth-of-type(2){font-size:12px;margin-top:2px}
+.oe-util:last-of-type span:first-child{display:none}
+.oe-util:last-of-type{justify-content:flex-end;font-size:12px}
+.oe-util:last-of-type span:last-child{color:var(--red-700)!important;font-weight:500}
+
+
+/* round-3 minors */
+#main:has(.camp-qa) .ds-table th .my-th>svg{display:none!important}
+.dk-ctools .dk-search{min-width:200px!important;flex:1 1 200px}
+.dk-ctools .ds-filter{padding-left:10px;padding-right:10px}
+.campl .ds-table-wrap{min-height:0!important;height:auto!important}
+.cp-table tbody tr:last-child td{border-bottom:1px solid var(--slate-100)}
+.tg-cell{width:240px;max-width:240px;min-height:56px;align-content:center}
+.tg-in{border:1px solid transparent!important;background:transparent!important;box-shadow:none!important;height:24px;padding:0 6px;font-size:12px;border-radius:var(--r-sm)}
+.tg-in:hover{border-color:var(--border)!important}
+.tg-in:focus{border-color:var(--ring)!important;background:#fff!important}
+.tg-chip{min-width:0}
+
+
+.dk-ctools .dk-search{flex:1 1 260px;max-width:320px}
+.dk-ctools>.ds-spacer{flex:1 0 100%;height:0;min-height:0}
+.dk-ctools>.disc-cols-wrap{margin-left:auto}
+
+
+.dk-ctools .dk-search{flex:0 1 186px!important;min-width:150px!important;max-width:186px}
+.dk-ctools .dk-search input{font-size:13px;padding-left:10px;padding-right:6px}
+.dk-ctools>.ds-spacer{flex:1 1 0;height:auto}
+
+
+.dk-ctools>.ds-spacer{display:none}
+.dk-ctools .dk-search{flex:1 1 200px!important;min-width:150px!important;max-width:240px}
+.dk-ctools{gap:8px 6px}
+.dk-ctools .ds-filter{padding-left:8px;padding-right:8px}
+.dk-ctools .ds-filter .ds-filter-x{margin-left:2px}
+
+
+.dk-ctools .dk-search{flex:0 0 192px!important;min-width:0!important;max-width:192px}
+.dk-ctools .dk-search input{padding-left:8px;padding-right:4px;text-overflow:clip}
+.dk-ctools>.ds-btn--primary{padding:0 12px}
 
 }

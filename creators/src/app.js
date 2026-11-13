@@ -2143,8 +2143,8 @@ function addCreatorsHTML(){
         ${csv?addcPreviewHTML(csv):''}
         <details class="addn-help"><summary>How importing works</summary><ul><li>Put the creators in a table in the doc, one Instagram handle per row, or one handle per line.</li><li>A header row (handle or username) is skipped.</li><li>Handles already in My creators are not added twice.</li></ul></details></div>`;
   return `<div class="disc-cfg-scrim" onclick="if(event.target===this)addcClose()">
-    <div class="addn" role="dialog" aria-modal="true" aria-label="Add Creators">
-      <div class="addn-head"><div><h3>Add Creators</h3><p>${S.addPlan?'Bring Instagram creators into My Creators and this shortlist.':'Bring Instagram creators into My Creators.'}</p></div><button type="button" class="ds-iconbtn" aria-label="Close" onclick="addcClose()">${X_SVG}</button></div>
+    <div class="addn" role="dialog" aria-modal="true" aria-label="Add creators">
+      <div class="addn-head"><div><h3>Add creators</h3><p>${S.addPlan?'Bring Instagram creators into My Creators and this shortlist.':'Bring Instagram creators into My Creators.'}</p></div><button type="button" class="ds-iconbtn" aria-label="Close" onclick="addcClose()">${X_SVG}</button></div>
       <div class="addn-body">
         <div class="addn-side" role="tablist" aria-label="Add method">${opt('paste',kb,'Paste handles','Type or paste a list')}${opt('file',upl,'Upload CSV','Spreadsheet, one handle per row')}${opt('csv',fi,'Google Doc','Paste a Google Doc link')}
           </div>
