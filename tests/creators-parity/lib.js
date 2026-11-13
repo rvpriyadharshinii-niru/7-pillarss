@@ -30,10 +30,13 @@ const SNAP_FN = () => {
   const txt = el => { const c = el.cloneNode(true); c.querySelectorAll('style,script').forEach(x => x.remove()); const h = document.createElement('div'); h.style.cssText='position:fixed;left:-9999px;top:0;width:1200px'; h.appendChild(c); document.body.appendChild(h); const t = c.innerText; h.remove(); return n(t); };
   const lay = [...layerEl.children].filter(c => !c.classList.contains('toast')).map(txt).join(' || ');
   const main = q('#main');
+  /* KNOWN-DIFF F1 (legacy.css shows .dk-mini while details open): neutralised so the fuzzer can see past it */
+  const hid = [...document.querySelectorAll('details[open] .dk-mini')]; const prev = hid.map(e => e.style.display); hid.forEach(e => e.style.display = 'none');
+  const mainTxt = n(main.innerText); hid.forEach((e, i) => e.style.display = prev[i]);
   return {
     hash: location.hash, st, toast, layer: lay,
     header: n(q('#header') && q('#header').innerText),
-    main: n(main.innerText),
+    main: mainTxt, miniLeak: hid.length,
     nTr: main.querySelectorAll('tr').length, nBtn: main.querySelectorAll('button').length,
     nCard: main.querySelectorAll('[class*=card]').length,
     navOn: n([...document.querySelectorAll('.nav .nav-row.on, .nav .nav-row.active, .nav [aria-current]')].map(x => x.innerText).join(',')),

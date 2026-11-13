@@ -190,3 +190,21 @@
 #main .hist .info{padding:12px 0;border-top:1px solid var(--slate-200);gap:4px}
 #main .hist .rail-head + .info{border-top:0;padding-top:4px}
 }
+@layer area{
+/* chrome.css styles .rail-card .info (later layer) — important needed to restyle the history rows */
+#main .hist .info{display:flex!important;flex-direction:column!important;align-items:flex-start!important;gap:2px!important;padding:12px 0!important;border-top:1px solid var(--slate-200)!important;border-bottom:0!important}
+#main .hist .rail-head + .info{border-top:0!important;padding-top:4px!important}
+#main .hist .info > span{font-size:12px!important;font-weight:400!important;color:var(--slate-500)!important;text-align:left!important}
+#main .hist .info > strong{font-size:13px!important;font-weight:500!important;color:var(--slate-900)!important;text-align:left!important;line-height:1.4!important}
+}
+@layer area{
+#main .avatar-stack{display:flex!important;align-items:center!important}
+#main .avatar-stack .brand-mark,#main .avatar-stack .avatar-more{width:32px!important;height:32px!important;min-width:32px!important;flex:none!important;border-radius:50%!important;border:2px solid var(--background)!important;margin-left:-8px!important;padding:0!important;font-size:12px!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;overflow:hidden!important;box-shadow:none!important}
+#main .avatar-stack > :first-child{margin-left:0!important}
+#main .avatar-stack .avatar-more{background:var(--slate-100)!important;color:var(--slate-700)!important}
+}
+@layer area{
+#main .post-media{aspect-ratio:1/1!important;max-height:none!important;height:auto!important}
+#main .post-media:has(.play)::before{display:none}
+#main .post-media .media{position:absolute;inset:0}
+}

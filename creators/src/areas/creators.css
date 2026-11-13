@@ -207,4 +207,49 @@ button.msd-camp:hover span:first-child{color:var(--primary)}
 .my-card-id b{font-size:14px;font-weight:600}
 .my-card-id span,.my-card-facts dt{color:var(--muted-foreground);font-size:12px}
 .my-card-facts dd{font-size:14px;font-weight:500;font-variant-numeric:tabular-nums}
+
+/* ── Review fixes ───────────────────────────────────────────────────────── */
+/* Toast text was dark-on-dark (legacy .toast-title colour); applies to every toast */
+.toast .toast-title{color:var(--primary-foreground)}
+.toast .toast-sub,.toast.toast--rich .toast-sub{color:var(--slate-300)}
+.toast .toast-link,.toast .toast-link:hover{color:var(--primary-foreground)}
+/* Tables: tighter cells so more default columns fit; soft edge where horizontal scroll is unavoidable */
+.ds-page .my-table thead th,.ds-page .my-table tbody td,.ds-page .ds-table--wide th,.ds-page .ds-table--wide td{padding-left:8px;padding-right:8px}
+.ds-page .my-table thead th.ds-cb,.ds-page .my-table tbody td.ds-cb{padding-left:16px;padding-right:0}
+.my-who{min-width:0;gap:8px}
+.ds-person-text .ds-table-title,.ds-namebtn{max-width:150px}
+.ds-page .ds-table th.ds-sticky-r,.ds-page .ds-table td.ds-sticky-r{width:128px;min-width:128px;max-width:128px;padding-left:8px;padding-right:8px}
+.ds-page .ds-table td.ds-sticky-r,.ds-page .ds-table th.ds-sticky-r,.ds-page .my-table td.my-act,.ds-page .my-table th.my-act-th{box-shadow:-10px 0 12px -8px color-mix(in srgb,var(--slate-900) 14%,transparent)}
+.ds-page .ds-table td.ds-sticky-l2,.ds-page .ds-table th.ds-sticky-l2,.ds-page .my-table tbody td:nth-child(2),.ds-page .my-table thead th:nth-child(2){box-shadow:10px 0 12px -8px color-mix(in srgb,var(--slate-900) 14%,transparent)}
+.ds-page .my-wrap,.ds-page .ds-table-wrap{scroll-snap-type:x proximity;scroll-padding-inline:300px 140px}
+.ds-page .my-table thead th,.ds-page .ds-table--wide thead th{scroll-snap-align:start}
+/* Header cells: one baseline, one icon size/colour */
+.ds-page .my-table thead th,.ds-page .ds-table thead th{vertical-align:middle;line-height:1}
+.my-th,.my-grp-btn{display:inline-flex;align-items:center;gap:6px;line-height:1;white-space:nowrap}
+.my-th svg,.my-grp-btn svg,.ds-page .my-table thead th svg,.ds-page .ds-table thead th svg{width:14px;height:14px;flex:none;margin:0;vertical-align:baseline;color:var(--slate-400);stroke:currentColor}
+.ds-page .my-table thead th.ds-num .my-th,.ds-page .my-table thead th.ds-num .my-grp-btn{display:flex;justify-content:flex-end;width:100%}
+/* Selection: bar is a neutral card, count in primary; selected rows get only a faint tint */
+.ds-page .bulk-bar{background:var(--surface)}
+.ds-page .bulk-bar .bb-l b{color:var(--primary)}
+.ds-page .my-table tbody tr.is-selected td,.ds-page .my-table tbody tr.is-selected>td.ds-cb,.ds-page .my-table tbody tr.is-selected>td:nth-child(2),.ds-page .my-table tbody tr.is-selected>td.my-act,.ds-page .ds-table tbody tr.is-selected td{background:color-mix(in srgb,var(--primary-soft) 55%,var(--surface))}
+/* Row / bulk controls: 32px */
+.ds-page .bulk-bar .addto-menu>summary.ds-btn,.ds-page .my-table .addto-menu>summary.ds-btn{height:32px;padding:0 12px;font-size:13px}
+.ds-page .bulk-bar .addto-menu>summary.ds-btn:not(:has(svg:first-child))::before{content:"+";font-size:16px;line-height:1;margin-right:6px;color:var(--slate-500)}
+.ds-page .my-table td.my-act .ds-more:not(.addto-menu)>summary{width:32px;height:32px;padding:0;display:inline-flex;align-items:center;justify-content:center}
+.ds-page .my-table td.my-act>*,.ds-page .my-table td.my-act .ds-row-end{display:inline-flex;align-items:center;gap:4px;vertical-align:middle}
+/* Overview strip: 2x2 on narrow screens */
+@media (max-width:700px){
+  .ds-ov-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ds-ov-stat+.ds-ov-stat{border-left:0}
+  .ds-ov-stat:nth-child(even){border-left:1px solid var(--slate-100)}
+  .ds-ov-stat:nth-child(n+3){border-top:1px solid var(--slate-100)}
+  .ds-ov-val small{white-space:nowrap}
+}
+/* Discover cards: designed neutral placeholder, neutral views chip, no source codes / fake player */
+.ds-cc-plat{display:none}
+.ds-cc-media{display:flex;flex-direction:column;justify-content:space-between;padding:8px}
+.ds-cc-media::before{content:"";position:absolute;inset:0;margin:auto;width:40px;height:40px;background:var(--slate-300);-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='18' height='14' rx='3'/%3E%3Cpath d='m10 9.5 5 2.5-5 2.5z'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='18' height='14' rx='3'/%3E%3Cpath d='m10 9.5 5 2.5-5 2.5z'/%3E%3C/svg%3E") center/contain no-repeat;pointer-events:none}
+.ds-cc-media .ds-cc-dur{background:var(--surface);color:var(--slate-700);border:1px solid var(--border)}
+.ds-cc-bar svg,.ds-cc-bar i{display:none}
+.ds-cc-bar{position:relative;display:inline-flex;align-self:flex-start;height:22px;padding:0 8px;align-items:center;background:var(--surface);border:1px solid var(--border);color:var(--slate-700)}
 }
