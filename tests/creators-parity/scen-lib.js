@@ -21,6 +21,8 @@ function mk(p) {
     },
     A: async (aria, i = 0) => { const l = p.locator(`[aria-label=${JSON.stringify(aria)}]:visible`).nth(i); await l.click({ timeout: 3000 }); await sleep(p, 90); },
     fillA: async (aria, v, i = 0) => { const l = p.locator(`[aria-label=${JSON.stringify(aria)}]:visible`).nth(i); await l.fill(v, { timeout: 3000 }); await sleep(p, 90); },
+    pick: async (i, v, scope = '#main') => { const lab = p.locator(scope + ' .ds-filter').nth(i); if (!(await lab.locator('.ds-menu.open').count())) await lab.click({ position: { x: 6, y: 6 } }); await lab.locator(`.ds-menu-item[data-v=${JSON.stringify(v)}]`).click({ timeout: 3000 }); await sleep(p, 90); },
+    try: async (k, fn) => { try { const v = await fn(); o.obs.push([k, v === undefined ? 'ok' : (typeof v === 'string' ? L.norm(v) : v)]); } catch (e) { o.obs.push([k, 'ERR ' + e.message.split('\n')[0].slice(0, 70)]); } },
     nav: async (page) => { await p.locator(`.nav [data-page="${page}"]`).click(); await sleep(p, 150); },
     snap: () => L.snap(p),
     m: async (n = 300, from = 0) => (await L.snap(p)).main.replace(/ /g, '').slice(from, from + n),
@@ -48,7 +50,7 @@ async function runAll(scenarios, only) {
       for (const w of ['orig', 'neu']) {
         const p = await L.newPage(B, w); const api = mk(p);
         try { await fn(api, w); results[name][w] = { ...api.o, errs: p.__errs.slice(0, 5) }; }
-        catch (e) { results[name][w] = { ...api.o, crash: e.message.split('\n')[0].slice(0, 160) + ' @' + (e.stack.split('\n').find(l => /scen-/.test(l)) || '').replace(/.*\//, ''), errs: p.__errs.slice(0, 5) }; }
+        catch (e) { results[name][w] = { ...api.o, crash: e.message.split('\n')[0].slice(0, 160) + ' @' + (e.stack.split('\n').find(l => /scen-(?!lib)/.test(l)) || '').replace(/.*\//, ''), errs: p.__errs.slice(0, 5) }; }
         await p.__ctx.close();
       }
     }
@@ -67,7 +69,7 @@ function report(results, tag) {
     const oo = r.orig.obs || [], nn = r.neu.obs || [];
     for (let i = 0; i < Math.max(oo.length, nn.length); i++) {
       const a = oo[i], b = nn[i];
-      if (!a || !b || a[0] !== b[0] || !L.same(a[1], b[1])) { issues.push(`PARITY ${(a || b)[0]}: orig=${JSON.stringify(a && a[1]).slice(0, 160)} neu=${JSON.stringify(b && b[1]).slice(0, 160)}`); }
+      if (!a || !b || a[0] !== b[0] || !L.same(a[1], b[1])) { issues.push(`PARITY ${(a || b)[0]}: orig=${String(JSON.stringify(a && a[1])).slice(0, 160)} neu=${String(JSON.stringify(b && b[1])).slice(0, 160)}`); }
     }
     if (issues.length) fails++;
     rows.push({ name, status: issues.length ? 'FAIL' : 'PASS', n: (oo.length) + '/' + (r.orig.asserts || []).length, issues });

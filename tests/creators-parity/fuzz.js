@@ -15,8 +15,8 @@ async function walk(B, seed) {
       const r = rnd(); let desc, ok = {};
       if (i === 0 || r < 0.04) { const n = NAVS[Math.floor(rnd() * NAVS.length)]; desc = 'nav:' + n; for (const w of ['orig', 'neu']) await pg[w].evaluate(n => document.querySelector('.nav [data-page="' + n + '"]').click(), n); }
       else if (r < 0.10) { desc = 'escape'; for (const w of ['orig', 'neu']) await pg[w].keyboard.press('Escape'); }
-      else if (r < 0.13) { desc = 'back'; for (const w of ['orig', 'neu']) await pg[w].goBack().catch(() => {}); if (!(await pg[w].evaluate(() => !!document.getElementById('layer')).catch(() => false))) await pg[w].goForward().catch(() => {}); }
-      else if (r < 0.15) { desc = 'forward'; for (const w of ['orig', 'neu']) await pg[w].goForward().catch(() => {}); }
+      else if (r < 0.13) { desc = 'back'; for (const w of ['orig', 'neu']) { await pg[w].goBack().catch(() => {}); if (!(await pg[w].evaluate(() => !!document.getElementById('layer')).catch(() => false))) await pg[w].goForward().catch(() => {}); } }
+      else if (r < 0.15) { desc = 'forward'; for (const w of ['orig', 'neu']) { await pg[w].goForward().catch(() => {}); if (!(await pg[w].evaluate(() => !!document.getElementById('layer')).catch(() => false))) await pg[w].goBack().catch(() => {}); } }
       else if (r < 0.17) { desc = 'reload'; for (const w of ['orig', 'neu']) { await pg[w].reload(); await pg[w].waitForFunction(() => typeof S !== 'undefined' && document.getElementById('main').innerHTML.length > 50); } }
       else if (r < 0.19) { desc = 'closeLayer'; for (const w of ['orig', 'neu']) await pg[w].evaluate(() => closeLayer()); }
       else {
@@ -50,11 +50,11 @@ async function walk(B, seed) {
       }
       for (const w of ['orig', 'neu']) await pg[w].waitForTimeout(40);
       const so = await L.snap(pg.orig), sn = await L.snap(pg.neu);
-      log.push(desc); res.steps = i + 1;
+      log.push(desc); res.steps = i + 1; { const en = pg.orig.__errs.length + pg.neu.__errs.length; if (en !== (res._en || 0)) { (res.errAt = res.errAt || []).push([i, desc]); res._en = en; } }
       const bad = CMP.filter(f => !L.same(so[f], sn[f]));
       if (bad.length) { res.diff = { step: i, desc, kind: 'snapshot', fields: bad.map(f => ['main', 'layer', 'header'].includes(f) ? { f, ...L.wordDiff(String(so[f]), String(sn[f])) } : { f, o: so[f], n: sn[f] }) }; break; }
     }
-  } catch (e) { res.diff = res.diff || { kind: 'exception', msg: e.message.slice(0, 200) }; }
+  } catch (e) { res.diff = res.diff || { kind: 'exception', msg: e.message.slice(0, 120) + ' | ' + (e.stack.split('\n')[1] || '').trim().slice(0, 100) }; }
   res.log = log; res.noise = res.noise || []; res.errs = { orig: pg.orig.__errs.slice(0, 5), neu: pg.neu.__errs.slice(0, 5) };
   for (const w of ['orig', 'neu']) await pg[w].__ctx.close().catch(() => {});
   return res;
@@ -62,7 +62,7 @@ async function walk(B, seed) {
 (async () => {
   await L.withBrowser(async B => {
     const seeds = []; for (let s = sf; s <= st; s++) seeds.push(s);
-    const out = await L.pool(seeds, 2, async s => { const r = await walk(B, s); console.log('seed', s, 'steps', r.steps, r.diff ? 'DIFF ' + JSON.stringify(r.diff).slice(0, 500) : 'ok', (r.noise.length ? 'NOISE' + r.noise.length + ' ' : '') + ((r.errs.orig.length || r.errs.neu.length) ? 'ERRS ' + JSON.stringify(r.errs).slice(0, 300) : '')); return r; });
+    const out = await L.pool(seeds, 3, async s => { let r; try { r = await walk(B, s); } catch (e) { r = { seed: s, steps: 0, diff: { kind: 'harness-crash', msg: e.message.slice(0, 100) }, errs: { orig: [], neu: [] }, noise: [] }; } if (r.errAt) console.log('  errAt', JSON.stringify(r.errAt)); console.log('seed', s, 'steps', r.steps, r.diff ? 'DIFF ' + JSON.stringify(r.diff).slice(0, 500) : 'ok', (r.noise.length ? 'NOISE' + r.noise.length + ' ' : '') + ((r.errs.orig.length || r.errs.neu.length) ? 'ERRS ' + JSON.stringify(r.errs).slice(0, 300) : '')); return r; });
     fs.writeFileSync(`/tmp/claude-0/fuzz-${sf}-${st}.json`, JSON.stringify(out));
   });
 })();

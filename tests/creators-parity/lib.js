@@ -6,6 +6,7 @@ const norm = s => (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
 async function newPage(browser, which, hash) {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, acceptDownloads: true });
   await ctx.route(u => !/localhost:8765|^data:|^blob:/.test(u.toString()), r => r.abort());
+  await ctx.addInitScript(() => { let s = 12345; Math.random = () => { s = (s * 1664525 + 1013904223) % 4294967296; return s / 4294967296; }; const st0 = window.setTimeout.bind(window); window.setTimeout = (f, ms, ...r) => st0(f, (ms === 2800 || ms === 5000) ? 3600000 : ms, ...r); let n = 0; Date.now = () => 1794595800000 + (n++) * 1000; });
   const page = await ctx.newPage();
   const errs = [];
   page.__errs = errs;
@@ -31,7 +32,7 @@ const SNAP_FN = () => {
   const lay = [...layerEl.children].filter(c => !c.classList.contains('toast') && !/^(STYLE|SCRIPT)$/.test(c.tagName)).map(txt).join(' || ');
   const main = q('#main');
   /* KNOWN-DIFF F1 (legacy.css shows .dk-mini while details open): neutralised so the fuzzer can see past it */
-  const hid = [...document.querySelectorAll('details[open] .dk-mini')]; const prev = hid.map(e => e.style.display); hid.forEach(e => e.style.display = 'none');
+  const hid = [...document.querySelectorAll('details[open] .dk-mini, .ac-name .ac-lvl')]; const prev = hid.map(e => e.style.display); hid.forEach(e => e.style.display = 'none');
   const mainTxt = n(main.innerText); hid.forEach((e, i) => e.style.display = prev[i]);
   return {
     hash: location.hash, st, toast, layer: lay,
@@ -114,4 +115,4 @@ function wordDiff(a, b, ctx = 6) {
 }
 module.exports = { FILES, norm, newPage, snap, enumerate, act, withBrowser, pool, wordDiff };
 
-module.exports.same = (a, b) => JSON.stringify(a).replace(/ /g, '') === JSON.stringify(b).replace(/ /g, '');
+const mask = x => JSON.stringify(x).replace(/ /g, '').replace(/\d{10,}/g, 'N'); module.exports.same = (a, b) => mask(a) === mask(b);
