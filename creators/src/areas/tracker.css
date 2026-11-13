@@ -92,9 +92,14 @@
 .ac-card .ac-tab-add{align-self:center;display:grid;place-items:center;flex:none;width:32px;height:32px;margin:0;padding:0;border:1px dashed var(--slate-300);border-radius:var(--r-md);background:transparent;color:var(--slate-600);cursor:pointer}
 .ac-card .ac-tab-add:hover{background:#fff;border-color:var(--slate-400);color:var(--foreground)}
 .ac-card .ac-tab-add svg{width:16px;height:16px}
-@media (max-width:1180px){
+@media (max-width:1280px){
+  .ac-table thead th.ac-first,.ac-table td.ac-first{width:340px;min-width:340px;max-width:340px}
+  .ac-card .ac-tab-ic{display:none}
+  .ac-card .ac-tab{padding:8px 8px 8px 12px}
+}
+@media (max-width:900px){
   .ac-card .ac-levels{overflow-x:auto}
-  .ac-card .ac-tab{flex:1 0 200px}
+  .ac-card .ac-tab{flex:1 0 160px}
 }
 
 /* ── Filters panel, chips, bulk bar ──────────────────────────────────────── */
@@ -174,7 +179,7 @@
 .ac-table tbody tr.ac-child:hover td{background:var(--slate-50)}
 .ac-table tbody tr.ac-child.ac-sel td{background:var(--blue-50)}
 .ac-table tbody tr:last-child td{border-bottom:1px solid var(--slate-100)}
-.ac-table td.ds-empty{height:auto;padding:48px 16px;text-align:center;color:var(--slate-500)}
+.ac-table td.ds-empty{height:auto;padding:48px 16px;text-align:left;color:var(--slate-500)}
 /* sticky first column: hairline edge only */
 .ac-table thead th.ac-first,.ac-table td.ac-first{position:sticky;left:0;z-index:4;width:400px;min-width:400px;max-width:400px;box-shadow:none;border-right:1px solid var(--border);background:#fff}
 .ac-table thead th.ac-first{z-index:7;background:var(--slate-50);padding:0 12px 0 16px;text-align:left}
@@ -256,6 +261,7 @@
 .ac-cols-pop .disc-col-row:hover{background:var(--slate-50)}
 .ac-cols-pop .disc-col-row input{width:16px;height:16px;margin:0;accent-color:var(--primary)}
 .ac-cols-pop .disc-cols-foot{display:flex;justify-content:flex-start;padding:8px;border-top:1px solid var(--border);background:#fff}
+@media (max-width:1280px){.ac-cols-pop{left:0;right:auto}}
 /* switch */
 .ac-sw{position:relative;display:inline-block;width:32px;height:18px;flex:none;cursor:pointer}
 .ac-sw input{position:absolute;inset:0;z-index:1;margin:0;opacity:0;cursor:pointer}

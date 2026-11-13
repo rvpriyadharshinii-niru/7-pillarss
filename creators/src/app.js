@@ -105,1148 +105,7 @@ function phPageHTML(){
 
 /* ── Status overlay (above the brand avatar): nothing to show yet ── */
 function reqOvRender(){ const b=document.getElementById('reqOvBody'); if(b) b.innerHTML='<div class="alert-empty"><b>Nothing here yet</b></div>'; }
-/* ════════ CRM MODULE · model, rules, persistence ════════ */
-const CRM_OUT=['Not Contacted','Contacted','Awaiting Response','Replied','Interested','Negotiating','Agreed','Declined','No Response','On Hold'];
-const CRM_STAGES=['Shortlisted','Contacted','Negotiating','Agreed','Onboarding','Ready','Active'];
-const CRM_DEL=['Not Started','In Production','Submitted','In Review','Changes Requested','Approved','Scheduled','Published','Cancelled'];
-const CRM_CONTRACT=['Not Created','Prepared','Sent','Signed','Revision Requested','Rejected'];
-const CRM_SEED=['Not Required','Pending','Dispatched','In Transit','Delivered','Issue'];
-const CRM_CH=['Instagram DM','Email','WhatsApp'];
-const CRM_RESP=['Interested','Needs more details','Unavailable','Declined'];
-const CRM_KEY='adam_crm_v1';
-const CRM={loaded:false,recs:[],dels:[],seq:100};
-const crmUid=p=>p+(++CRM.seq);
-const crmNow=()=>{const d=new Date();return `${TODAY} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;};
-const crmDue=n=>{const d=new Date(TODAY+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10);};
-const crmDateLabel=d=>d?campDate(d):'Not set';
-const crmOwners=()=>CAMP_OWNERS.filter(o=>o!=='Unassigned').concat(['Unassigned']);
-const crmIsPage=()=>!!(S.page&&S.page.indexOf('crm')===0);
-const crmOnbNew=()=>({started:false,contract:'Not Created',contact:{name:'',email:'',phone:'',rep:'',shipping:''},seed:{status:'Pending',qty:1,dispatch:'',courier:'',tracking:'',delivery:'',confirmed:false},briefShared:false,briefAck:false,clarify:[]});
-function crmBoot(){
-  if(CRM.loaded) return; CRM.loaded=true;
-  try{
-    const raw=localStorage.getItem(CRM_KEY);
-    if(raw){
-      const d=JSON.parse(raw); CRM.recs=d.recs||[]; CRM.dels=d.dels||[]; CRM.seq=d.seq||100;
-      (d.camps||[]).forEach(c=>{ const i=CAMP_LIST.findIndex(x=>x.id===c.id); if(i>-1) CAMP_LIST.splice(i,1); CAMP_LIST.unshift(c); });
-      crmSeedV2(); return;
-    }
-  }catch(e){}
-  crmSeed(); crmSeedV2();
-}
-function crmSave(){ try{ localStorage.setItem(CRM_KEY,JSON.stringify({recs:CRM.recs,dels:CRM.dels,seq:CRM.seq,camps:CAMP_LIST.filter(c=>c.crm)})); }catch(e){} }
-function crmRec(id){ return CRM.recs.find(r=>r.id===id); }
-function crmRecFor(planId,cid){ return CRM.recs.find(r=>r.planId===planId&&r.creatorId===cid); }
-function crmRecsOf(planId){ return CRM.recs.filter(r=>r.planId===planId); }
-function crmRecsOfCamp(campId){ return CRM.recs.filter(r=>r.campId===campId); }
-function crmDel(id){ return CRM.dels.find(d=>d.id===id); }
-function crmLog(r,action,notes,from,to){ r.activity.unshift({id:crmUid('a'),at:crmNow(),actor:'You',action,notes:notes||'',from:from||null,to:to||null}); }
-function crmOverride(r,what){ crmLog(r,'Override',what); }
-function crmSetStatus(r,to,note){ const from=r.status; if(from===to) return; r.status=to; crmLog(r,'Status changed',note||'',from,to); }
-function crmNewRec(planId,cid,owner,notes){
-  const p=planOf(planId);
-  const r={id:crmUid('r'),planId,creatorId:cid,owner:owner||'Karan',status:'Not Contacted',channel:'Instagram DM',created:TODAY,lastContact:null,nextFollowUp:null,quote:null,estimate:mxOf(cid).cost||0,agreed:null,declineReason:'',prevStatus:null,offers:[],
-    terms:{deliverables:'',platform:'Instagram',posts:1,format:p?p.format:'Reel',usage:'12 months organic',licence:'12 months',exclusivity:'None',payment:'50% on signing, 50% on publish',publishDate:''},
-    approval:null,tasks:[],msgs:[],activity:[],onb:crmOnbNew(),campId:null,withdrawn:false,notes:notes||''};
-  CRM.recs.unshift(r); crmLog(r,'Sent to outreach',notes||'',null,'Not Contacted'); return r;
-}
-/* Onboarding blockers: mandatory items only */
-function crmBlockers(r){
-  const o=r.onb, b=[];
-  if(r.withdrawn) return [{t:'Creator withdrew after agreement',sec:'agreement',mand:true}];
-  if(r.status!=='Agreed') b.push({t:'Commercial terms not agreed',sec:'agreement'});
-  if(o.contract!=='Signed') b.push({t:'Contract not signed',sec:'contract'});
-  const c=o.contact;
-  if(!c.name||!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(c.email||'')||!/^\d{10}$/.test(c.phone||'')) b.push({t:'Creator contact details incomplete',sec:'creator'});
-  if(o.seed.status!=='Not Required'&&o.seed.status!=='Delivered') b.push({t:o.seed.status==='Issue'?'Product delivery has an issue':'Product delivery pending',sec:'seeding'});
-  if(!o.briefAck) b.push({t:o.clarify.some(x=>!x.done)?'Brief clarification open':'Brief acknowledgement pending',sec:'brief'});
-  return b;
-}
-const crmReady=r=>r.status==='Agreed'&&!r.withdrawn&&crmBlockers(r).length===0;
-function crmBlockMsg(r){ const b=crmBlockers(r); if(!b.length) return ''; const t=b.map(x=>x.t.charAt(0).toLowerCase()+x.t.slice(1)); return `${r.onb.activated?'Activated with open items':'Open items'}. ${t.length>1?t.slice(0,-1).join(', ')+' and '+t[t.length-1]:t[0]}.`; }
-/* Pipeline stage per participation record (distinct records; Declined sits outside the pipeline) */
-function crmStage(r){
-  if(r.status==='Declined') return null;
-  if(r.campId) return r.onb.activated?'Active':(crmReady(r)?'Ready':'Onboarding');
-  if(r.status==='Not Contacted') return 'Shortlisted';
-  if(r.status==='Agreed'){ if(crmReady(r)) return 'Ready'; return r.onb.started?'Onboarding':'Agreed'; }
-  if(r.status==='Negotiating'||(r.status==='On Hold'&&r.prevStatus==='Negotiating')) return 'Negotiating';
-  return 'Contacted';
-}
-const crmStageTone=s=>({Shortlisted:'',Contacted:'info',Negotiating:'info',Agreed:'ok',Onboarding:'warn',Ready:'ok',Active:'ok'})[s]||'';
-function crmOpenOffer(r){ const o=r.offers.filter(x=>x.status==='Open'); return o.length?o[o.length-1]:null; }
-function crmPendingApproval(r){ return !!(r.approval&&r.approval.status==='Pending'); }
-function crmOverdueTask(t){ return t.status==='Open'&&t.due&&t.due<TODAY; }
-function crmOverdueDel(d){ return d.due&&d.due<TODAY&&!['Published','Cancelled'].includes(d.status); }
-/* Unallocated budget for a plan: planned minus agreed fees and estimates still open */
-function crmBudget(p){
-  const recs=crmRecsOf(p.id);
-  const agreed=recs.filter(r=>r.status==='Agreed'||r.campId).reduce((s,r)=>s+(r.agreed||0),0);
-  const estimated=recs.filter(r=>r.status!=='Agreed'&&!r.campId&&r.status!=='Declined').reduce((s,r)=>s+(r.estimate||0),0);
-  const selectedEst=p.shortlisted.reduce((s,id)=>s+plCost(p,id),0);
-  return {planned:p.budget||0,agreed,estimated,unallocated:(p.budget||0)-agreed-estimated,selectedEst};
-}
-function crmSeed(){
-  const a=crmNewRec('pl3','cr1','Karan','Strong fit for festive gifting');
-  a.status='Negotiating'; a.lastContact=TODAY; a.quote=45000; a.agreed=null;
-  a.msgs.push({id:crmUid('m'),at:crmNow(),dir:'out',channel:'Instagram DM',subject:'',body:'Hi Pavan, we would love to invite you to the Plix Festive Gift Box campaign. Are you available this month, and what would be your quote for one Instagram Reel?',simulated:true});
-  a.msgs.push({id:crmUid('m'),at:crmNow(),dir:'in',channel:'Instagram DM',subject:'',body:'Hi! Yes, interested. My Reel rate for this is ₹45,000.',simulated:false});
-  a.offers.push({id:crmUid('o'),at:TODAY,by:'Creator',kind:'Counteroffer',amount:45000,deliverables:'1 Reel',notes:'Quoted rate',status:'Open'});
-  a.offers.unshift({id:crmUid('o'),at:TODAY,by:'Brand',kind:'Offer',amount:30000,deliverables:'1 Reel',notes:'Opening offer',status:'Superseded'});
-  a.approval={status:'Pending',requested:45000,planned:a.estimate,note:'Quote is above the estimated rate'};
-  crmLog(a,'Quote recorded','Creator quoted ₹45,000',null,'Interested');
-  const b=crmNewRec('pl12','cr7','Ankit','Festive timing');
-  b.lastContact=TODAY; crmSetStatus(b,'Contacted','Invitation sent');
-  b.status='Declined'; b.declineReason='Not available during the festive season'; crmLog(b,'Declined',b.declineReason,'Contacted','Declined');
-  crmSave();
-}
-
-/* Sample outreach, onboarding and campaign activation records. Added once; records carry seedV2. */
-function crmSeedV2(){
-  if(CRM.recs.some(r=>r.seedV2)) return;
-  const mk=(planId,cid,owner,status,notes)=>{
-    const r=crmNewRec(planId,cid,owner,notes); r.seedV2=true;
-    if(status!=='Not Contacted'){ r.status=status; r.lastContact=TODAY; crmLog(r,'Status changed',notes,'Not Contacted',status); }
-    return r;
-  };
-  mk('pl1','cr2','Karan','Contacted','Invitation sent on Instagram DM');
-  mk('pl1','cr3','Ankit','Awaiting Response','Follow-up due this week');
-  mk('pl1','cr4','Karan','Replied','Asked about usage rights');
-  mk('pl1','cr5','Ankit','Interested','Open to a Reel at the quoted rate');
-  mk('pl1','cr6','Karan','No Response','Two messages, no reply');
-  mk('pl1','cr8','Ankit','On Hold','Paused until the festive budget is confirmed');
-  mk('pl2','cr3','Karan','Negotiating','Counteroffer on the table');
-  const d=mk('pl2','cr4','Ankit','Declined','Declined the brief');
-  d.declineReason='Schedule clash with a current campaign';
-  const ag1=mk('pl2','cr5','Karan','Agreed','Terms agreed');
-  ag1.quote=60000; ag1.agreed=TODAY; ag1.onb.started=true; ag1.onb.contract='Sent';
-  const ag2=mk('pl2','cr6','Ankit','Agreed','Terms agreed');
-  ag2.quote=45000; ag2.agreed=TODAY;
-  const p=planOf('pl2');
-  const camp={id:'caSeed1',name:'Lets go · Festive wave',product:p?p.product:'Plix Vitamin C Glow Serum 30 ml',category:'Skincare',legacy:false,status:'Active',tracking:true,created:'2026-10-20',budget:85000,plannedVideos:4,linedUp:0,manager:'Karan',creatorIds:['cr5','cr6'],posts:[],crm:{planId:'pl2',source:'CRM',objective:p?p.objective:''}};
-  if(!CAMP_LIST.some(c=>c.id===camp.id)) CAMP_LIST.unshift(camp);
-  [ag1,ag2].forEach(r=>{ r.campId=camp.id; crmLog(r,'Added to campaign',camp.name,null,'Campaign'); crmMakeDeliverables(r,camp,'2026-11-10'); });
-  crmSave();
-}
-
-/* ════════ CRM · routing, shared UI, outreach, onboarding, activation pages ════════ */
-function crmNavCur(){ if(!crmIsPage()) return null; return {'crm-plan':'crm-shortlists','crm-outreach-detail':'crm-outreach','crm-onboarding-detail':'crm-onboarding','crm-activation-detail':'crm-activation'}[S.page]||S.page; }
-function crmGo(page,ids){ Object.assign(S,{page,discCreator:null,myCreator:null,crmReturn:null},ids||{}); paintHeader(); paintBody(true); window.scrollTo(0,0); }
-function crmBack(){ const p=S.crmReturn; S.crmReturn=null; S.myCreator=null; S.page=p||'crm'; paintHeader(); paintBody(true); window.scrollTo(0,0); }
-function crmOpenRec(id){ crmGo('crm-outreach-detail',{crmRecId:id,crmTab:'comm'}); }
-function crmOpenPlan(id){ crmGo('crm-plan',{planId:id,pTab:'overview',plSel:[],plCmpOnly:null,plNoteEdit:null}); }
-function crmOpenOnb(id){ crmGo('crm-onboarding-detail',{crmRecId:id,crmSec:'agreement'}); }
-function crmOpenAct(id){ crmGo('crm-activation-detail',{crmCampId:id,crmActTab:'overview'}); }
-function crmNotFound(what){ return `<div class="ds-page"><div class="ds-card ds-pad"><span class="ds-section-title">${what} not found</span><p class="ds-caption">It may have been removed.</p><button class="ds-btn ds-btn--outline ds-btn--sm" onclick="crmGo('crm')">Back to CRM overview</button></div></div>`; }
-function crmCrumb(items){ return `<div class="crumb">${items.map((it,i)=>i<items.length-1?`<button class="link" onclick="${it[1]}">${esc(it[0])}</button> / `:`<span>${esc(it[0])}</span>`).join('')}</div>`; }
-const crmPill=(s)=>`<span class="crm-pill crm-pill--${stageSlug(s)}">${esc(s)}</span>`;
-const crmNameCell=(c,onclick)=>`<div class="ds-person">${dsAv(c.id,c.name)}<div class="ds-person-text"><button class="ds-namebtn" onclick="${onclick}">${esc(c.name)}</button><span class="ds-table-meta">${esc(c.handle||'')}</span></div></div>`;
-const crmMenu=(label,items)=>`<details class="ds-more"><summary class="ds-btn ds-btn--outline ds-btn--sm" aria-label="${esc(label)}">⋯</summary><div class="ds-more-menu">${items.map(([t,fn,d])=>`<button class="${d?'is-danger':''}" onclick="${fn}">${t}</button>`).join('')}</div></details>`;
-const crmPageHead=(title,desc,actions)=>`<div class="ds-head"><div><h1 class="ds-page-title">${title}</h1><p class="ds-page-desc">${desc}</p></div><div class="ds-actions">${actions||''}</div></div>`;
-const crmEmpty=(title,desc,btn)=>`<div class="crm-empty"><b>${esc(title)}</b><span>${esc(desc)}</span>${btn||''}</div>`;
-function crmRouter(){
-  crmBoot();
-  switch(S.page){
-    case 'crm': return crmOverviewHTML();
-    case 'crm-shortlists': return crmShortlistsHTML();
-    case 'crm-plan': return planDetailHTML();
-    case 'crm-outreach': return crmOutreachListHTML();
-    case 'crm-outreach-detail': return crmOutreachDetailHTML();
-    case 'crm-onboarding': return crmOnboardingListHTML();
-    case 'crm-onboarding-detail': return crmOnboardingDetailHTML();
-    case 'crm-activation': return crmActListHTML();
-    case 'crm-activation-detail': return crmActDetailHTML();
-  }
-  return crmOverviewHTML();
-}
-function crmShortlistsHTML(){
-  const html=shortlistHTML(true).replace(/onclick="openPlan\('/g,"onclick=\"crmOpenPlan('");
-  return html.replace('<h1 class="ds-page-title">Shortlist</h1>','<h1 class="ds-page-title">Campaign plans</h1>')
-    .replace('Set a target once, then shortlist creators against it. When a list is ready, create a campaign from it.','Shortlisted creators move from here into outreach. Open a list to send creators to outreach.');
-}
-/* ── Outreach list ── */
-function crmNextDue(r){ const d=r.tasks.filter(t=>t.status==='Open'&&t.due).map(t=>t.due).sort(); return d[0]||null; }
-function crmOutFiltered(){
-  const q=(S.crmOutQ||'').toLowerCase().trim(), st=S.crmOutStatus||'All', ow=S.crmOutOwner||'All', src=S.crmOutSrc||'All', so=S.crmOutSort||'activity';
-  const rows=CRM.recs.filter(r=>{ const c=crOf(r.creatorId)||{}, p=planOf(r.planId)||{};
-    return (!q||[c.name,c.handle,p.name].join(' ').toLowerCase().includes(q))&&(st==='All'||r.status===st)&&(ow==='All'||r.owner===ow)&&(src==='All'||r.planId===src); });
-  const act=r=>r.activity[0]?r.activity[0].at:r.created;
-  return rows.sort((a,b)=> so==='followup' ? (crmNextDue(a)||'9999').localeCompare(crmNextDue(b)||'9999') : act(b).localeCompare(act(a)));
-}
-function crmOutRowHTML(r){
-  const c=crOf(r.creatorId)||{name:'Unknown',handle:''}, p=planOf(r.planId)||{name:'—',product:''};
-  const nd=crmNextDue(r), od=nd&&nd<TODAY, sel=(S.crmOutSel||[]).includes(r.id), closed=r.status==='Declined';
-  const menu=[['Open outreach',`crmOpenRec('${r.id}')`],['Log message',`crmComposeOpen('${r.id}')`]];
-  if(!closed) menu.push(['Record reply',`crmReplyOpen('${r.id}')`]);
-  if(r.status==='Awaiting Response'||r.status==='Contacted') menu.push(['Mark no response',`crmSetNoResponse('${r.id}')`]);
-  if(!['Declined','Agreed'].includes(r.status)) menu.push(r.status==='On Hold'?['Resume negotiation',`crmResume('${r.id}')`]:['Put on hold',`crmHold('${r.id}')`]);
-  if(!['Declined','Agreed'].includes(r.status)) menu.push(['Decline creator',`crmDeclineOpen('${r.id}')`,true]);
-  return `<tr class="${sel?'is-selected':''}"><td class="ds-cb"><input type="checkbox" aria-label="Select ${esc(c.name)}" ${sel?'checked':''} onchange="crmOutSelToggle('${r.id}',this.checked)"></td>
-    <td>${crmNameCell(c,`crmOpenRec('${r.id}')`)}</td>
-    <td>${esc(p.name)}</td><td>${esc(p.product||'')}</td>
-    <td><select class="ds-select crm-sel" aria-label="Owner for ${esc(c.name)}" onchange="crmSetOwner('${r.id}',this.value)">${crmOwners().map(o=>`<option ${o===r.owner?'selected':''}>${esc(o)}</option>`).join('')}</select></td>
-    <td>${esc(r.channel)}</td><td>${crmPill(r.status)}</td>
-    <td>${r.lastContact?campDate(r.lastContact):'<span class="ds-table-meta">Not yet</span>'}</td>
-    <td>${nd?`<span class="${od?'crm-od':''}">${campDate(nd)}${od?' · overdue':''}</span>`:'<span class="ds-table-meta">None</span>'}</td>
-    <td class="ds-num">${r.quote?rupees(r.quote):'—'}</td><td class="ds-num">${r.agreed?rupees(r.agreed):'—'}</td>
-    <td class="ds-sticky-r">${crmMenu('More actions for '+c.name,menu)}</td></tr>`;
-}
-function crmOutreachListHTML(){
-  const rows=crmOutFiltered(), total=CRM.recs.length, sel=(S.crmOutSel||[]).filter(id=>CRM.recs.some(r=>r.id===id));
-  const plansWith=[...new Set(CRM.recs.map(r=>r.planId))].map(id=>planOf(id)).filter(Boolean);
-  const bar=sel.length?`<div class="pl-bulk" role="region" aria-label="Bulk owner"><strong>${sel.length} selected</strong><span class="pl-bulk-sp"></span><select id="crmBulkOwner" class="crm-bulk-sel" aria-label="Owner">${crmOwners().map(o=>`<option>${esc(o)}</option>`).join('')}</select><button type="button" class="pl-bulk-btn" onclick="crmBulkOwner()">${icon('user','ico-sm')}Assign owner</button><button type="button" class="pl-bulk-btn pl-bulk-clear" onclick="crmOutSelClear()">Clear</button></div>`:'';
-  const body=!total?crmEmpty('No outreach records yet','Send creators from a shortlist to start outreach.',`<button class="ds-btn ds-btn--primary ds-btn--sm" onclick="crmGo('crm-shortlists')">Go to shortlists</button>`)
-    :!rows.length?crmEmpty('No matching records','Try another search, or clear a filter.',`<button class="ds-btn ds-btn--outline ds-btn--sm" onclick="crmClearOutFilters()">Clear filters</button>`)
-    :`<div class="ds-table-wrap"><table class="ds-table ds-table--wide crm-table"><thead><tr><th class="ds-cb"></th><th>Creator</th><th>Source shortlist</th><th>Product</th><th>Owner</th><th>Channel</th><th>Outreach status</th><th>Last contact</th><th>Next follow-up</th><th class="ds-num">Creator quote</th><th class="ds-num">Agreed amount</th><th class="ds-sticky-r">Actions</th></tr></thead><tbody>${rows.map(crmOutRowHTML).join('')}</tbody></table></div>`;
-  return `<div class="ds-page">
-    <div class="crumb"><button class="link" onclick="crmGo('crm')">CRM</button> / <span>Outreach</span></div>
-    ${crmPageHead('Outreach','Every creator sent from a shortlist, with owner, status and next follow-up.','')}
-    <div class="ds-toolbar ds-toolbar--wrap">${dsSearch('crmOutQ','Search creator or list',S.crmOutQ||'')}
-      ${dsFilter('crmOutStatus','Status',[['All','All statuses'],...CRM_OUT.map(s=>[s,s])],S.crmOutStatus||'All')}
-      ${dsFilter('crmOutOwner','Owner',[['All','All owners'],...crmOwners().map(o=>[o,o])],S.crmOutOwner||'All')}
-      ${dsFilter('crmOutSrc','Source shortlist',[['All','All shortlists'],...plansWith.map(p=>[p.id,p.name])],S.crmOutSrc||'All')}
-      ${dsFilter('crmOutSort','Sort',[['activity','Sort: last activity'],['followup','Sort: next follow-up']],S.crmOutSort||'activity')}
-      <span class="ds-spacer"></span><span class="ds-table-meta">${rows.length} of ${total} records</span></div>
-    ${bar}${body}
-  </div>`;
-}
-function crmClearOutFilters(){ Object.assign(S,{crmOutQ:'',crmOutStatus:'All',crmOutOwner:'All',crmOutSrc:'All'}); paintBody(); }
-/* ── Outreach detail ── */
-function crmOutreachDetailHTML(){
-  const r=crmRec(S.crmRecId); if(!r) return crmNotFound('Outreach record');
-  const c=crOf(r.creatorId)||{name:'Unknown',handle:'',tier:'',followers:0}, p=planOf(r.planId)||{name:'—',product:'',objective:'',format:'',budget:0,audience:{}};
-  const tab=S.crmTab||'comm', stage=crmStage(r), bud=crmBudget(p);
-  const acts=[];
-  if(r.status!=='Declined') acts.push(`<button class="ds-btn ds-btn--primary ds-btn--sm" onclick="crmComposeOpen('${r.id}')">${icon('comment','ico-sm')}Log message</button>`);
-  if(!['Declined','Agreed','Not Contacted'].includes(r.status)) acts.push(`<button class="ds-btn ds-btn--outline ds-btn--sm" onclick="crmReplyOpen('${r.id}')">Record reply</button>`);
-  if(['Interested','Replied'].includes(r.status)) acts.push(`<button class="ds-btn ds-btn--outline ds-btn--sm" onclick="crmStartNeg('${r.id}')">Start negotiation</button>`);
-  if(r.status==='Negotiating'){ acts.push(`<button class="ds-btn ds-btn--outline ds-btn--sm" onclick="crmOfferOpen('${r.id}','Offer')">Record offer</button>`,`<button class="ds-btn ds-btn--outline ds-btn--sm" onclick="crmOfferOpen('${r.id}','Counteroffer')">Record counteroffer</button>`); }
-  if(r.status==='Agreed') acts.push(`<button class="ds-btn ds-btn--primary ds-btn--sm" onclick="crmOpenOnb('${r.id}')">Move to onboarding</button>`);
-  const more=[];
-  if(r.status==='On Hold') more.push(['Resume negotiation',`crmResume('${r.id}')`]); else if(!['Declined','Agreed'].includes(r.status)) more.push(['Put on hold',`crmHold('${r.id}')`]);
-  if(!['Declined','Agreed'].includes(r.status)) more.push(['Decline creator',`crmDeclineOpen('${r.id}')`,true]);
-  const actionBar=`<div class="crm-actbar">${acts.join('')}<span class="ds-spacer"></span>${more.length?crmMenu('More outreach actions',more):''}</div>`;
-  const fit=(c.id&&p.id)?creatorScores(c,p).fit:null;
-  const crumb=crmCrumb([['CRM','crmGo(\'crm\')'],['Outreach',"crmGo('crm-outreach')"],[c.name||'Creator','']]);
-  const tabs=dsTabsFor('crmTab',[['comm','Communication'],['neg','Negotiation'],['tasks',`Tasks (${r.tasks.filter(t=>t.status==='Open').length})`],['activity','Activity']],tab);
-  let main='';
-  if(tab==='comm') main=crmCommHTML(r);
-  else if(tab==='neg') main=crmNegHTML(r,p);
-  else if(tab==='tasks') main=crmTasksHTML(r);
-  else main=crmActivityHTML(r);
-  const cc=DISC.find(x=>x.id===r.creatorId)||c, m=mx(cc);
-  const past=CAMP_LIST.filter(x=>(x.creatorIds||[]).includes(r.creatorId)&&!x.crm);
-  const cposts=creatorActivity(cc).posts;
-  const pastGroups=past.map(x=>({name:x.name,camp:x,posts:cposts.filter(q=>q.campaign===x.name)})).sort((x,y)=>String(y.camp.created).localeCompare(String(x.camp.created)));
-  const lifeAvg=cposts.length?cposts.reduce((x,q)=>x+(q.views||0),0)/cposts.length:0;
-  const openOffer=crmOpenOffer(r);
-  const nextTask=r.tasks.filter(t=>t.status==='Open').sort((x,y)=>String(x.due).localeCompare(String(y.due)))[0];
-  const ctx=`<aside class="crm-ctx crm-qv" aria-label="Creator and outreach context">
-    <div class="cq-kpis">
-      <div class="cq-kpi"><span class="mqq-kl">${icon('user','ico-sm')}Followers</span><b>${fmt(c.followers||0)}</b></div>
-      <div class="cq-kpi"><span class="mqq-kl">${icon('heart','ico-sm')}Engagement</span><b>${m.engagement}%</b></div>
-      <div class="cq-kpi"><span class="mqq-kl">${icon('shield','ico-sm')}Authenticity</span><b>${m.auth??'—'}</b></div>
-      <div class="cq-kpi"><span>Fit</span><b>${fit??'—'}<small>/100</small></b></div>
-    </div>
-    <div class="cq-stats">
-      <div><span>Estimated rate</span><b>${rupees(r.estimate)}</b></div>
-      <div><span>Quoted</span><b>${r.quote?rupees(r.quote):'—'}</b></div>
-      <div><span>Planned</span><b>${rupees(bud.planned)}</b></div>
-      <div><span>Agreed</span><b>${rupees(bud.agreed)}</b></div>
-    </div>
-    <section class="cq-sec"><div class="cq-sec-head"><h4>Outreach</h4></div><dl class="pl-rv-grid crm-ctx-grid">
-      ${planRv('Status',crmPill(r.status))}${stage&&stage!==r.status?planRv('Stage',crmPill(stage)):''}${planRv('Owner',planTxt(r.owner))}
-      ${planRv('Last contact',r.lastContact?campDate(r.lastContact):'<span class="pl-rv-none">None</span>')}
-      ${planRv('Next follow-up',nextTask?`${esc(nextTask.title)} · ${campDate(nextTask.due)}`:'<span class="pl-rv-none">No open task</span>')}
-      ${planRv('Open offer',openOffer?`${esc(openOffer.by)} · ${rupees(openOffer.amount)}`:'<span class="pl-rv-none">None</span>')}
-      ${planRv('Approval',r.approval?esc(r.approval.status):'<span class="pl-rv-none">Not required</span>')}</dl></section>
-    <section class="cq-sec"><div class="cq-sec-head"><h4>Campaign</h4></div><dl class="pl-rv-grid crm-ctx-grid">
-      ${planRv('Product',planTxt(p.product))}${planRv('Objective',planTxt(p.objective))}${planRv('Format',planTxt(p.format||r.terms.format))}
-      ${planRv('Audience',planChips(planAges(p)))}${planRv('Locations',planChips((p.audience&&p.audience.locations)||[]))}</dl></section>
-    <section class="cq-sec"><div class="cq-sec-head"><h4>Budget</h4></div><dl class="pl-rv-grid crm-ctx-grid">
-      ${planRv('Planned',rupees(bud.planned))}${planRv('Agreed fees',rupees(bud.agreed))}${planRv('Estimated open',rupees(bud.estimated))}${planRv('Unallocated',`<b>${rupees(bud.unallocated)}</b>`)}</dl></section>
-    <details class="cq-sec crm-past"><summary><div class="cq-sec-head"><h4>Past collaborations</h4><span class="cq-summary">${past.length} campaign${past.length===1?'':'s'}</span></div><div class="crm-past-tags">${past.map(x=>`<span class="cq-chip">${esc(x.name)}</span>`).join('')||'<span class="pl-rv-none">No past campaigns on record</span>'}</div></summary>
-      ${cqPlixTimelineHTML(pastGroups,null,lifeAvg)}</details>
-    <div class="crm-actbar"><button class="ds-btn ds-btn--ghost ds-btn--sm" onclick="crmOpenPlan('${p.id}')">${esc(p.name)}</button></div>
-  </aside>`;
-  return `<div class="ds-page crm-detail">
-    ${crumb}
-    <header class="cdh crm-dh">
-      <div class="cdh-top">
-        <button class="ds-dh-back" aria-label="Back to Outreach" onclick="crmGo('crm-outreach')">${dsBackSvg}</button>
-        ${dsAv(c.id,c.name)}
-        <div class="cdh-main">
-          <div class="cdh-title"><h1>${esc(c.name)}</h1>${crmPill(r.status)}${stage&&stage!==r.status?crmPill(stage):''}</div>
-          <div class="cdh-meta">${esc(c.handle||'')} · ${esc(c.tier||'')} · Fit ${fit!=null?fit:'—'}/100 · Campaign plan: ${esc(p.name)} · Owner: <select class="crm-inline-sel" aria-label="Relationship owner" onchange="crmSetOwner('${r.id}',this.value)">${crmOwners().map(o=>`<option ${o===r.owner?'selected':''}>${esc(o)}</option>`).join('')}</select></div>
-        </div>
-        <div class="cdh-actions"><button class="ds-btn ds-btn--outline ds-btn--sm" onclick="crmJumpOpen('${r.id}')">Set status</button><button class="ds-btn ds-btn--outline ds-btn--sm" onclick="crmBackToList('${r.planId}')">Campaign plan</button><button class="ds-btn ds-btn--outline ds-btn--sm" onclick="crmProfile('${c.id}','${r.id}')">${icon('user','ico-sm')}Creator profile</button></div>
-      </div>
-      <div class="cdh-tabs">${tabs}</div>
-    </header>
-    ${actionBar}
-    ${r.status==='Declined'?`<div class="ds-note ds-note--warn">Declined${r.declineReason?': '+esc(r.declineReason):''}. History is kept. Pick a replacement from the shortlist.</div>`:''}
-    <div class="crm-split"><div class="crm-main">${main}</div>${ctx}</div>
-  </div>`;
-}
-function crmBackToList(planId){ crmOpenPlan(planId); }
-function crmProfile(cid,recId){ S.crmReturn=S.page; S.crmRecId=recId; goCreator(cid); }
-function crmCommHTML(r){
-  const msgs=r.msgs.map(m=>`<div class="crm-msg ${m.dir==='out'?'is-out':'is-in'}"><div class="crm-msg-h"><b>${m.dir==='out'?'You':esc(cNameOf(r.creatorId).split(' ')[0])}</b><span>${esc(m.channel)}${m.subject?' · '+esc(m.subject):''} · ${esc(m.at)}</span></div><p>${esc(m.body)}</p></div>`).join('');
-  const nd=crmNextDue(r);
-  return `<section class="crm-card"><div class="crm-card-h"><h3>Communication</h3><button class="ds-btn ds-btn--outline ds-btn--sm" onclick="crmComposeOpen('${r.id}')">${icon('comment','ico-sm')}Log message</button></div>
-    ${r.msgs.length?`<div class="crm-timeline">${msgs}</div>`:crmEmpty('No messages yet','Log the first message you sent or received. It stays on this record.')}
-    ${nd?`<p class="ds-caption">Next follow-up due ${campDate(nd)}.</p>`:''}</section>`;
-}
-function crmNegHTML(r,p){
-  const lastBrand=[...r.offers].reverse().find(o=>o.by==='Brand'), lastCre=[...r.offers].reverse().find(o=>o.by==='Creator');
-  const open=crmOpenOffer(r), acc=r.offers.find(o=>o.status==='Accepted');
-  const nstat=r.status==='Agreed'?'Agreed':acc?'Terms accepted, awaiting confirmation':open?'Awaiting response on open offer':r.status==='On Hold'?'On hold':r.status==='Negotiating'?'In negotiation':'Not started';
-  const ap=r.approval;
-  const apHTML=ap?`<section class="crm-card crm-approval"><div class="crm-card-h"><h3>Commercial approval</h3>${crmPill(ap.status==='Pending'?'Approval pending':ap.status)}</div>
-    <dl class="pl-rv-grid">${planRv('Planned rate',rupees(ap.planned))}${planRv('Requested rate',rupees(ap.requested))}${planRv('Difference',`+${rupees(ap.requested-ap.planned)} over planned`)}${planRv('Remaining shortlist budget',rupees(crmBudget(p).unallocated))}${planRv('Note',planTxt(ap.note))}</dl>
-    ${ap.status==='Pending'?`<div class="crm-actbar"><button class="ds-btn ds-btn--primary ds-btn--sm" onclick="crmApprovalDecide('${r.id}','Approved')">Approve</button><button class="ds-btn ds-btn--outline ds-btn--sm" onclick="crmApprovalDecide('${r.id}','Revision')">Request revision</button><button class="ds-btn ds-btn--outline ds-btn--sm" onclick="crmApprovalDecide('${r.id}','Rejected')">Reject</button></div>`:''}
-    ${ap.status==='Rejected'||ap.status==='Revision'?`<p class="ds-caption">${ap.status==='Rejected'?'Rejected. Record a new offer within the planned rate, or decline the creator.':'Revision requested. Record a revised offer for approval.'}</p>`:''}</section>`:'';
-  const tiles=[['Initial estimate',rupees(r.estimate),'Planned rate, not spend'],['Creator quote',r.quote?rupees(r.quote):'—','Creator figure'],['Brand proposed',lastBrand?rupees(lastBrand.amount):'—','Latest brand offer'],['Latest counteroffer',lastCre?rupees(lastCre.amount):'—','Latest from creator'],['Agreed fee',r.agreed?rupees(r.agreed):'—','Saved on confirmation']];
-  const hist=[...r.offers].map(o=>`<tr><td>${campDate(o.at)}</td><td>${esc(o.by)}</td><td>${esc(o.kind)}</td><td class="ds-num">${rupees(o.amount)}</td><td>${esc(o.deliverables||'')}</td><td>${esc(o.notes||'')}</td><td>${crmPill(o.status)}</td></tr>`).join('');
-  const t=r.terms;
-  return `<section class="crm-card"><div class="crm-card-h"><h3>Negotiation</h3><span class="crm-status-line">${esc(nstat)}</span></div>
-    <div class="crm-tiles">${tiles.map(([l,v,s])=>`<div class="crm-tile"><span>${l}</span><b>${v}</b><small>${s}</small></div>`).join('')}</div>
-    ${apHTML}
-    <div class="crm-actbar">
-      ${r.status==='Negotiating'&&open?`<button class="ds-btn ds-btn--outline ds-btn--sm" onclick="crmOfferAccept('${r.id}')">Accept terms</button><button class="ds-btn ds-btn--outline ds-btn--sm" onclick="crmOfferReject('${r.id}')">Reject terms</button>`:''}
-      ${r.status==='Negotiating'&&acc?`<button class="ds-btn ds-btn--primary ds-btn--sm" onclick="crmConfirmOpen('${r.id}')">Confirm agreement</button>`:''}
-      ${r.status==='Agreed'?'':`<button class="ds-btn ds-btn--ghost ds-btn--sm" onclick="crmTermsOpen('${r.id}')">Edit proposed terms</button>`}
-    </div>
-    <h4 class="crm-sub">Agreement terms</h4>
-    <dl class="pl-rv-grid">${planRv('Deliverables',planTxt(t.deliverables))}${planRv('Platform',planTxt(t.platform))}${planRv('Posts',planTxt(t.posts))}${planRv('Format',planTxt(t.format))}${planRv('Usage rights',planTxt(t.usage))}${planRv('Licensing',planTxt(t.licence))}${planRv('Exclusivity',planTxt(t.exclusivity))}${planRv('Payment terms',planTxt(t.payment))}${planRv('Expected publish',t.publishDate?campDate(t.publishDate):'<span class="pl-rv-none">Not set</span>')}</dl>
-    <h4 class="crm-sub">Offer history</h4>
-    ${r.offers.length?`<div class="ds-table-wrap"><table class="ds-table crm-table-sm"><thead><tr><th>Date</th><th>Proposed by</th><th>Type</th><th class="ds-num">Amount</th><th>Deliverables</th><th>Notes</th><th>Status</th></tr></thead><tbody>${hist}</tbody></table></div>`:crmEmpty('No offers yet','Start negotiation, then record the first offer.')}
-    <div class="crm-actbar">${r.status==='Negotiating'?`<button class="ds-btn ds-btn--outline ds-btn--sm" onclick="crmOfferOpen('${r.id}','Offer')">Record offer</button><button class="ds-btn ds-btn--outline ds-btn--sm" onclick="crmOfferOpen('${r.id}','Counteroffer')">Record counteroffer</button>`:''}</div>
-  </section>`;
-}
-function crmTasksHTML(r){
-  const rows=r.tasks.map(t=>{ const od=crmOverdueTask(t); return `<tr class="${t.status!=='Open'?'is-done':''}"><td>${esc(t.title)}</td><td>${esc(t.owner)}</td><td>${campDate(t.due)}${od?' <span class="crm-od">Overdue</span>':''}</td><td>${crmPill(t.status==='Open'?(od?'Overdue':'Open'):t.status==='Done'?'Completed':'Cancelled')}</td>
-    <td class="ds-sticky-r">${t.status==='Open'?`<div class="crm-row-acts"><button class="ds-btn ds-btn--outline ds-btn--sm" onclick="crmTaskDone('${r.id}','${t.id}')">Mark completed</button><button class="ds-btn ds-btn--ghost ds-btn--sm" onclick="crmTaskReschedule('${r.id}','${t.id}')">Reschedule</button><button class="ds-btn ds-btn--ghost ds-btn--sm" onclick="crmTaskCancel('${r.id}','${t.id}')">Cancel</button></div>`:''}</td></tr>`; }).join('');
-  return `<section class="crm-card"><div class="crm-card-h"><h3>Follow-up tasks</h3></div>
-    <div class="crm-taskform"><input id="crmTaskTitle" class="nl-input crm-in" placeholder="e.g. Chase quote on Friday" aria-label="Task title"><select id="crmTaskOwner" class="ds-select" aria-label="Owner">${crmOwners().map(o=>`<option ${o===r.owner?'selected':''}>${esc(o)}</option>`).join('')}</select><input id="crmTaskDue" type="date" class="crm-in crm-date" value="${crmDue(2)}" aria-label="Due date"><button class="ds-btn ds-btn--primary ds-btn--sm" onclick="crmTaskAdd('${r.id}')">Add follow-up</button></div>
-    ${r.tasks.length?`<div class="ds-table-wrap"><table class="ds-table crm-table-sm"><thead><tr><th>Task</th><th>Owner</th><th>Due</th><th>Status</th><th class="ds-sticky-r">Actions</th></tr></thead><tbody>${rows}</tbody></table></div>`:crmEmpty('No follow-ups','Add one to keep this creator on track. Overdue follow-ups appear on the CRM overview.')}
-  </section>`;
-}
-function crmActivityHTML(r){
-  const rows=r.activity.map(a=>`<li><span class="crm-act-t">${esc(a.at)}</span><div><b>${esc(a.action)}</b>${a.from||a.to?` <span class="crm-chg">${a.from?esc(a.from):''}${a.from&&a.to?' → ':''}${a.to?esc(a.to):''}</span>`:''}${a.notes?`<p>${esc(a.notes)}</p>`:''}<span class="ds-table-meta">${esc(a.actor)}</span></div></li>`).join('');
-  return `<section class="crm-card"><div class="crm-card-h"><h3>Activity history</h3></div>${rows?`<ol class="crm-activity">${rows}</ol>`:crmEmpty('No activity yet','Changes to this record are logged here.')}</section>`;
-}
-/* ── Onboarding list ── */
-function crmOnbState(r){ const b=crmBlockers(r); if(r.withdrawn) return 'Blocked'; if(!r.onb.started) return 'Not Started'; if(r.campId) return 'Completed'; if(!b.length) return 'Ready'; if(b.some(x=>x.sec==='seeding'&&r.onb.seed.status==='Issue')||r.onb.contract==='Rejected'||r.onb.contract==='Revision Requested') return 'Blocked'; return 'In Progress'; }
-function crmOnbProgress(r){ const o=r.onb; const done=[o.contract==='Signed',!!(o.contact.name&&/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(o.contact.email||'')&&/^\d{10}$/.test(o.contact.phone||'')),o.seed.status==='Not Required'||o.seed.status==='Delivered',o.briefAck]; return {n:done.filter(Boolean).length,t:4}; }
-function crmOnboardingListHTML(){
-  const f=S.crmOnbF||'All';
-  const recs=CRM.recs.filter(r=>r.status==='Agreed'||r.withdrawn||r.campId).filter(r=>f==='All'||crmOnbState(r)===f);
-  const all=CRM.recs.filter(r=>r.status==='Agreed'||r.withdrawn||r.campId);
-  const rows=recs.map(r=>{ const c=crOf(r.creatorId)||{name:'Unknown'}, p=planOf(r.planId)||{name:'—',product:''}, st=crmOnbState(r), pr=crmOnbProgress(r), b=crmBlockers(r)[0];
-    return `<tr><td>${crmNameCell(c,`crmOpenOnb('${r.id}')`)}</td><td>${esc(p.name)}</td><td>${esc(p.product||'')}</td><td class="ds-num">${rupees(r.agreed||0)}</td>
-      <td>${crmPill(r.onb.contract)}</td><td>${r.onb.contact.email&&r.onb.contact.phone?'<span class="crm-ok">Complete</span>':'<span class="crm-warn">Incomplete</span>'}</td>
-      <td>${crmPill(r.onb.seed.status)}</td><td>${r.onb.briefAck?'<span class="crm-ok">Acknowledged</span>':'<span class="crm-warn">Pending</span>'}</td>
-      <td><div class="crm-prog"><i style="width:${pr.n/pr.t*100}%"></i></div><span class="ds-table-meta">${pr.n}/${pr.t}</span></td>
-      <td>${st==='Ready'?`<button class="ds-btn ds-btn--primary ds-btn--sm" onclick="crmOpenOnb('${r.id}')">Ready for activation</button>`:st==='Not Started'?`<button class="ds-btn ds-btn--outline ds-btn--sm" onclick="crmStartOnb('${r.id}')">Start onboarding</button>`:`<button class="ds-btn ds-btn--ghost ds-btn--sm" onclick="crmOpenOnb('${r.id}')">${b?esc(b.t):'Open'}</button>`}</td></tr>`; }).join('');
-  const body=!all.length?crmEmpty('No creators to onboard yet','Creators appear here once their commercial terms are agreed in outreach.',`<button class="ds-btn ds-btn--outline ds-btn--sm" onclick="crmGo('crm-outreach')">Go to outreach</button>`)
-    :!recs.length?crmEmpty('No creators in this view','Choose another filter.',`<button class="ds-btn ds-btn--outline ds-btn--sm" onclick="setPageState('crmOnbF','All')">Show all</button>`)
-    :`<div class="ds-table-wrap"><table class="ds-table ds-table--wide crm-table"><thead><tr><th>Creator</th><th>Source shortlist</th><th>Product</th><th class="ds-num">Agreed fee</th><th>Contract</th><th>Creator details</th><th>Product seeding</th><th>Brief</th><th>Progress</th><th>Next action</th></tr></thead><tbody>${rows}</tbody></table></div>`;
-  return `<div class="ds-page">
-    <div class="crumb"><button class="link" onclick="crmGo('crm')">CRM</button> / <span>Onboarding</span></div>
-    ${crmPageHead('Onboarding','Agreed creators complete contract, details, product seeding and the brief before activation.','')}
-    <div class="ds-toolbar ds-toolbar--wrap">${dsFilter('crmOnbF','Status',[['All','All statuses'],['Not Started','Not started'],['In Progress','In progress'],['Blocked','Blocked'],['Ready','Ready'],['Completed','Completed']],f)}<span class="ds-spacer"></span><span class="ds-table-meta">${recs.length} of ${all.length} creators</span></div>
-    ${body}</div>`;
-}
-function planVsActualHTML(p,camp){
- const recs=crmRecsOf(p.id), live=recs.filter(r=>!r.withdrawn&&r.status!=='Declined');
- const committed=live.filter(r=>r.status==='Agreed'||r.campId).reduce((s,r)=>s+(Number(r.agreed)||0),0);
- const estimated=live.filter(r=>r.status!=='Agreed'&&!r.campId).reduce((s,r)=>{const o=crmOpenOffer(r);return s+(Number(o?.amount)||Number(r.quote)||Number(r.estimate)||0);},0);
- const actualSpend=camp?sumOf(camp.posts||[],'cost'):0;
- const planned=Number(p.budget)||Number(camp?.budget)||0, campaignBudget=Number(camp?.budget)||planned;
- const variance=committed-planned, remaining=planned-committed;
- const dropped=recs.filter(r=>r.withdrawn||r.status==='Declined');
- const rows=dropped.map(r=>`<tr><td>${esc(cNameOf(r.creatorId))}</td><td>${r.withdrawn?'Withdrew':'Declined'}</td><td class="ds-num">${rupees(r.agreed||r.quote||r.estimate||0)}</td></tr>`).join('');
- const neg='style="color:var(--ds-danger,#b91c1c)"';
- const tile=(l,v,sub,st='')=>`<div class="ds-card" style="padding:12px 14px"><span class="ds-caption">${l}</span><b class="ds-num" style="display:block;font-size:18px;margin-top:4px" ${st}>${v}</b><small class="ds-caption">${sub}</small></div>`;
- return `<section class="ds-card" style="padding:16px;margin-bottom:12px"><div class="ds-head" style="margin-bottom:12px"><div><span class="ds-caption">Commercial control</span><h2 style="margin:2px 0 0;font-size:16px">Plan vs actual</h2><p class="ds-page-desc" style="margin:4px 0 0">Live creator commitments are recalculated from CRM agreements. Withdrawn and declined creators are excluded from committed cost.</p></div>${camp?`<button class="ds-btn ds-btn--outline ds-btn--sm" onclick="openCampaign('${camp.id}')">Open campaign →</button>`:''}</div>
- <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px">
-  ${tile('Approved plan budget',rupees(planned),'Original planning baseline')}
-  ${tile('Campaign budget',rupees(campaignBudget),'Current campaign allocation')}
-  ${tile('Estimated pipeline',rupees(estimated),'Active, not-yet-agreed creators')}
-  ${tile('Agreed commitments',rupees(committed),`${live.filter(r=>r.status==='Agreed'||r.campId).length} active agreements`)}
-  ${tile('Actual recorded spend',rupees(actualSpend),'Sum of campaign post costs')}
-  ${tile('Remaining vs commitments',rupees(remaining),remaining<0?'Over planned budget':'Within planned budget',remaining<0?neg:'')}
-  ${tile('Budget variance',`${variance>0?'+':''}${rupees(variance)}`,'Commitments minus planned budget',variance>0?neg:'')}
-  ${tile('Live CRM records',live.length,'Not declined or withdrawn')}
-  ${tile('Dropped off',dropped.length,'Declined or withdrawn')}
- </div>
- ${dropped.length?`<details style="margin-top:12px"><summary class="ds-caption" style="cursor:pointer">View dropped creators (${dropped.length})</summary><div class="ds-table-wrap" style="margin-top:8px"><table class="ds-table"><thead><tr><th>Creator</th><th>Outcome</th><th class="ds-num">Last estimated / agreed fee</th></tr></thead><tbody>${rows}</tbody></table></div></details>`:''}
- <p class="ds-caption" style="margin:12px 0 0">Actual recorded spend is the sum of post-level costs entered in campaign content. It is shown separately from agreed creator commitments to avoid double-counting the same fee.</p></section>`;
-}
-function crmBudgetHTML(p){
-  const b=crmBudget(p);
-  return `<div class="crm-budget" role="group" aria-label="Budget summary"><div><span>Planned budget</span><b>${rupees(b.planned)}</b></div><div><span>Estimated for shortlist (not spend)</span><b>${rupees(b.selectedEst)}</b></div><div><span>Agreed fees (committed)</span><b>${rupees(b.agreed)}</b></div><div><span>Unallocated</span><b class="${b.unallocated<0?'crm-od':''}">${rupees(b.unallocated)}</b></div></div>`;
-}
-
-/* ════════ CRM · actions (every button routes through here) ════════ */
-const CRM_TPL=[
-  ['Invitation',(c,p)=>({subject:`Collaboration invite: ${p.product||'our campaign'}`,body:`Hi ${c.split(' ')[0]}, we would love to invite you to collaborate on the ${p.product||'campaign'} campaign. Are you available for one ${p.format||'Reel'} on Instagram? Could you share your availability and a commercial quote?`})],
-  ['Availability and quote',(c,p)=>({subject:`Quote request: ${p.product||'campaign'}`,body:`Hi ${c.split(' ')[0]}, following up on our invite for ${p.product||'the campaign'}. Could you share your availability this month and your quote for one ${p.format||'Reel'}?`})],
-  ['Follow-up',(c,p)=>({subject:`Following up: ${p.product||'campaign'}`,body:`Hi ${c.split(' ')[0]}, just checking whether you had a chance to look at our invite for ${p.product||'the campaign'}. Happy to answer any questions.`})],
-  ['Thank you (not proceeding)',(c)=>({subject:'Thank you',body:`Hi ${c.split(' ')[0]}, thank you for letting us know. We understand and hope to work together in the future.`})]
-];
-const CRM_DECLINE=['Not available in this period','Rate is too high','Not a fit for this product','Competitor conflict','Other'];
-const CRM_CONTACT_ERR=(c)=>{ const e=[]; if(!c.name) e.push('Enter a contact name'); if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(c.email||'')) e.push('Enter a valid email'); if(!/^\d{10}$/.test(c.phone||'')) e.push('Phone must be 10 digits'); return e; };
-const crmFirst=id=>cNameOf(id).split(' ')[0];
-const crmLocalTime=()=>crmNow().slice(11);
-/* ── Send to outreach ── */
-function crmRowActionHTML(p,c){
-  const r=crmRecFor(p.id,c.id);
-  if(r) return `<span class="crm-mini">${crmPill(r.status)}</span> <button class="ds-btn ds-btn--ghost ds-btn--sm" onclick="crmOpenRec('${r.id}')">Open outreach</button>`;
-  if((p.shortlisted||[]).includes(c.id)) return `<button class="ds-btn ds-btn--outline ds-btn--sm" onclick="crmSendDialog('${p.id}',['${c.id}'])">${icon('plus','ico-sm')}Send to outreach</button>`;
-  return '';
-}
-function crmSendSelected(){ const ids=(S.plSel||[]).filter(id=>{ const p=planOf(S.planId); return p&&p.shortlisted.includes(id); }); if(!ids.length) return toast('Select shortlisted creators to send'); crmSendDialog(S.planId,ids); }
-function crmSendDialog(planId,ids){
-  const p=planOf(planId); if(!p) return;
-  const dup=ids.filter(id=>crmRecFor(planId,id)), fresh=ids.filter(id=>!dup.includes(id));
-  const est=fresh.reduce((s,id)=>s+(mxOf(id).cost||0),0), bud=crmBudget(p);
-  const rows=ids.map(id=>{ const c=crOf(id)||{name:id,handle:''}, r=crmRecFor(planId,id); return `<tr class="${r?'is-dup':''}"><td>${crmNameCell(c,'')}</td><td class="ds-num">${r?'—':rupees(mxOf(id).cost)}</td><td>${r?`${crmPill(r.status)} <button class="ds-btn ds-btn--ghost ds-btn--sm" onclick="crmOpenRec('${r.id}')">Open existing record</button>`:'<span class="crm-ok">Will be created</span>'}</td></tr>`; }).join('');
-  showDrawer('Send to outreach',`<div class="ds-page ds-dlg crm-drawer">
-    <header class="crm-dr-h"><h2>Send to outreach</h2><button class="ds-iconbtn" aria-label="Close" onclick="closeLayer()">&times;</button></header>
-    <div class="crm-dr-b">
-      <section class="crm-card"><dl class="pl-rv-grid">${planRv('Source shortlist',planTxt(p.name))}${planRv('Product',planTxt(p.product))}${planRv('Objective',planTxt(p.objective))}${planRv('Proposed deliverables',`${fresh.length||ids.length} × ${esc(p.format||'Reel')}`)}${planRv('Planned budget',rupees(bud.planned))}${planRv('Estimated cost (new)',rupees(est))}${planRv('Unallocated after send',rupees(bud.unallocated-est))}</dl></section>
-      <section class="crm-card"><h4 class="crm-sub">Creators</h4><div class="ds-table-wrap"><table class="ds-table crm-table-sm"><thead><tr><th>Creator</th><th class="ds-num">Estimated cost</th><th>Outreach</th></tr></thead><tbody>${rows}</tbody></table></div>
-        ${dup.length?`<div class="ds-note ds-note--warn">${dup.length} creator${dup.length>1?'s are':' is'} already in outreach for this shortlist. ${dup.length>1?'They have':'It has'} not been duplicated.</div>`:''}
-        <p class="ds-caption">Estimated costs are planned rates. They are not spend until an agreement is confirmed.</p></section>
-      <section class="crm-card"><div class="ds-form"><label class="ds-field"><span>Relationship owner</span><select id="crmSendOwner">${crmOwners().map(o=>`<option ${o==='Karan'?'selected':''}>${esc(o)}</option>`).join('')}</select></label>
-        <label class="ds-field"><span>Outreach notes (optional)</span><textarea id="crmSendNotes" rows="3" placeholder="Anything the owner should know before contacting"></textarea></label></div></section>
-    </div>
-    <footer class="crm-dr-f"><button class="ds-btn ds-btn--outline" onclick="closeLayer()">Cancel</button><button class="ds-btn ds-btn--primary" ${fresh.length?'':'disabled'} onclick="crmSendConfirm('${planId}',[${ids.map(i=>`'${i}'`).join(',')}])">Send ${fresh.length} to outreach</button></footer>
-  </div>`,'crm-drawer-w');
-}
-function crmSendConfirm(planId,ids){
-  const owner=dlgVal('crmSendOwner')||'Karan', notes=dlgVal('crmSendNotes');
-  const created=[], skipped=[];
-  ids.forEach(id=>{ if(crmRecFor(planId,id)) skipped.push(id); else created.push(crmNewRec(planId,id,owner,notes)); });
-  crmSave();
-  const p=planOf(planId);
-  showDrawer('Sent to outreach',`<div class="ds-page ds-dlg crm-drawer">
-    <header class="crm-dr-h"><h2>${created.length} creator${created.length===1?'':'s'} sent to outreach</h2><button class="ds-iconbtn" aria-label="Close" onclick="closeLayer()">&times;</button></header>
-    <div class="crm-dr-b"><div class="ds-note">Each creator now has an outreach record set to Not Contacted, owned by ${esc(owner)}. Their shortlist link is kept.</div>
-      ${skipped.length?`<div class="ds-note ds-note--warn">${skipped.length} already had a record for this shortlist. Open the existing record instead: ${skipped.map(id=>`<button class="ds-btn ds-btn--ghost ds-btn--sm" onclick="crmOpenRec('${crmRecFor(planId,id).id}')">${esc(cNameOf(id))}</button>`).join(' ')}</div>`:''}
-    </div>
-    <footer class="crm-dr-f"><button class="ds-btn ds-btn--outline" onclick="closeLayer()">Continue shortlisting</button><button class="ds-btn ds-btn--primary" onclick="closeLayer();S.crmOutSrc='${planId}';crmGo('crm-outreach')">Open outreach</button></footer>
-  </div>`,'crm-drawer-w');
-  paintBody(true);
-  toast(`${created.length} sent to outreach${skipped.length?` · ${skipped.length} already in outreach`:''}`);
-}
-/* ── Owners, bulk owner ── */
-function crmSetOwner(id,v){ const r=crmRec(id); if(!r||r.owner===v) return; const from=r.owner; r.owner=v; crmLog(r,'Owner changed','',from,v); crmSave(); paintBody(); toast(`Owner set to ${v}`); }
-function crmOutSelToggle(id,on){ const s=new Set(S.crmOutSel||[]); on?s.add(id):s.delete(id); S.crmOutSel=[...s]; paintBody(); }
-function crmOutSelClear(){ S.crmOutSel=[]; paintBody(); }
-function crmBulkOwner(){ const v=(document.getElementById('crmBulkOwner')||{}).value||'Karan'; const ids=S.crmOutSel||[]; ids.forEach(id=>{ const r=crmRec(id); if(r&&r.owner!==v){ const from=r.owner; r.owner=v; crmLog(r,'Owner changed','Bulk assignment',from,v); } }); S.crmOutSel=[]; crmSave(); paintBody(); toast(`${ids.length} record${ids.length===1?'':'s'} assigned to ${v}`); }
-/* ── Messaging (simulated) ── */
-function crmComposeOpen(id){
-  const r=crmRec(id); if(!r) return; const c=crOf(r.creatorId)||{name:'Creator',handle:''}, p=planOf(r.planId)||{};
-  const t=CRM_TPL[0][1](c.name,p);
-  dlg('Log message',`${esc(c.name)} · ${esc(c.handle||'')}. Record a message you sent or received outside the app. Nothing is sent from here.`,
-    `<label class="ds-field"><span>Contact channel</span><select id="crmCh">${CRM_CH.map(x=>`<option ${x===r.channel?'selected':''}>${x}</option>`).join('')}</select></label>
-     <label class="ds-field"><span>Template</span><select id="crmTpl" onchange="crmTplPick('${id}',this.value)">${CRM_TPL.map((x,i)=>`<option value="${i}">${esc(x[0])}</option>`).join('')}</select></label>
-     <label class="ds-field" id="crmSubjWrap"><span>Subject</span><input id="crmSubj" value="${esc(t.subject)}"></label>
-     <label class="ds-field"><span>Message</span><textarea id="crmBody" rows="6">${esc(t.body)}</textarea></label>`,
-    `<button class="ds-btn ds-btn--outline" onclick="closeLayer()">Cancel</button><button class="ds-btn ds-btn--primary" onclick="crmSend('${id}')">Log message</button>`);
-}
-function crmTplPick(id,i){ const r=crmRec(id); const c=crOf(r.creatorId)||{name:'Creator'}; const t=CRM_TPL[+i][1](c.name,planOf(r.planId)||{}); document.getElementById('crmSubj').value=t.subject; document.getElementById('crmBody').value=t.body; }
-function crmSend(id){
-  const r=crmRec(id), body=dlgVal('crmBody'), subj=dlgVal('crmSubj'), ch=dlgVal('crmCh')||r.channel;
-  if(!body) return toast('Write a message before sending');
-  r.channel=ch; r.lastContact=TODAY;
-  r.msgs.unshift({id:crmUid('m'),at:crmNow(),dir:'out',channel:ch,subject:ch==='Email'?subj:'',body,simulated:true});
-  const from=r.status;
-  if(r.status==='Not Contacted') crmSetStatus(r,'Contacted','Invitation logged');
-  else if(r.status==='Contacted') crmSetStatus(r,'Awaiting Response','Follow-up logged');
-  if(!r.tasks.some(t=>t.status==='Open'&&t.title==='Follow up if no reply')&&['Contacted','Awaiting Response'].includes(r.status)){
-    r.tasks.unshift({id:crmUid('t'),title:'Follow up if no reply',owner:r.owner,due:crmDue(3),status:'Open',created:TODAY});
-    r.nextFollowUp=crmDue(3);
-  }
-  crmLog(r,'Message logged',`${ch}: ${body.slice(0,80)}${body.length>80?'…':''}`);
-  crmSave(); closeLayer(); paintBody(); toast('Message logged to the timeline');
-}
-/* ── Replies ── */
-function crmReplyOpen(id){
-  const r=crmRec(id); if(!r||r.status==='Declined') return;
-  dlg('Record reply','Log what the creator said. The outcome sets the outreach status.',
-    `<label class="ds-field"><span>Response date</span><input id="crmRD" type="date" value="${TODAY}"></label>
-     <label class="ds-field"><span>Response channel</span><select id="crmRC">${CRM_CH.map(x=>`<option ${x===r.channel?'selected':''}>${x}</option>`).join('')}</select></label>
-     <label class="ds-field"><span>Creator message</span><textarea id="crmRM" rows="3" placeholder="Paste or summarise the reply"></textarea></label>
-     <label class="ds-field"><span>Outcome</span><select id="crmRI">${CRM_RESP.map(x=>`<option>${x}</option>`).join('')}</select></label>
-     <label class="ds-field"><span>Creator quote (₹)</span><input id="crmRQ" type="number" min="0" placeholder="Required for Interested"></label>
-     <label class="ds-field"><span>Availability</span><input id="crmRA" placeholder="e.g. Free from 5 Nov"></label>
-     <label class="ds-field"><span>Notes</span><textarea id="crmRN" rows="2"></textarea></label>`,
-    `<button class="ds-btn ds-btn--outline" onclick="closeLayer()">Cancel</button><button class="ds-btn ds-btn--primary" onclick="crmReplySave('${id}')">Save reply</button>`);
-}
-function crmReplySave(id){
-  const r=crmRec(id), msg=dlgVal('crmRM'), outcome=dlgVal('crmRI'), q=Number(dlgVal('crmRQ'))||0, notes=dlgVal('crmRN'), avail=dlgVal('crmRA'), ch=dlgVal('crmRC'), date=dlgVal('crmRD')||TODAY;
-  if(!msg) return toast('Enter the creator’s message');
-  if(outcome==='Interested'&&!q) return toast('Record the creator quote for an interested reply');
-  if(outcome==='Declined'&&!notes) return toast('Add a decline reason in notes');
-  r.msgs.unshift({id:crmUid('m'),at:date+' '+crmLocalTime(),dir:'in',channel:ch,subject:'',body:msg,simulated:false});
-  r.lastContact=date; r.availability=avail||r.availability||'';
-  if(q){ r.quote=q; }
-  const map={'Interested':'Interested','Needs more details':'Replied','Unavailable':'Declined','Declined':'Declined'};
-  const to=map[outcome];
-  if(outcome==='Unavailable'){ r.declineReason='Unavailable'; }
-  if(outcome==='Declined'){ r.declineReason=notes; }
-  r.tasks.forEach(t=>{ if(t.status==='Open'&&t.title==='Follow up if no reply') t.status='Cancelled'; });
-  crmLog(r,'Reply recorded',`${outcome}${q?` · quote ${rupees(q)}`:''}${avail?` · ${avail}`:''}${notes?` · ${notes}`:''}`);
-  if(to!==r.status) crmSetStatus(r,to,`Reply: ${outcome}`);
-  if(to==='Declined'){ r.tasks.forEach(t=>{ if(t.status==='Open') t.status='Cancelled'; }); }
-  crmSave(); closeLayer(); paintBody(); toast(`Reply recorded · ${to}`);
-}
-function crmSetNoResponse(id){ const r=crmRec(id); crmSetStatus(r,'No Response','Marked manually after follow-ups'); crmSave(); paintBody(); toast('Marked as No Response'); }
-function crmHold(id){ const r=crmRec(id); r.prevStatus=r.status; crmSetStatus(r,'On Hold','Paused by manager'); crmSave(); paintBody(); toast('Negotiation on hold. History is kept.'); }
-function crmResume(id){ const r=crmRec(id); const back=r.prevStatus||'Negotiating'; crmSetStatus(r,back,'Resumed'); r.prevStatus=null; crmSave(); paintBody(); toast('Negotiation resumed'); }
-function crmStartNeg(id){ const r=crmRec(id); crmSetStatus(r,'Negotiating','Negotiation started'); crmSave(); paintBody(); toast('Negotiation started. Record the first offer.'); }
-function crmDeclineOpen(id){
-  const r=crmRec(id); const c=crOf(r.creatorId)||{name:'Creator'};
-  dlg(`Decline ${c.name}`,'The creator is marked Declined. History stays on the record, and open follow-ups are cancelled.',
-    `<label class="ds-field"><span>Reason</span><select id="crmDR">${CRM_DECLINE.map(x=>`<option>${esc(x)}</option>`).join('')}</select></label><label class="ds-field"><span>Notes</span><textarea id="crmDN" rows="2" placeholder="Details for the team"></textarea></label>`,
-    `<button class="ds-btn ds-btn--outline" onclick="closeLayer()">Cancel</button><button class="ds-btn ds-btn--danger" onclick="crmDecline('${id}')">Decline creator</button>`);
-}
-function crmDecline(id){
-  const r=crmRec(id), reason=dlgVal('crmDR')+(dlgVal('crmDN')?` — ${dlgVal('crmDN')}`:'');
-  r.declineReason=reason; r.tasks.forEach(t=>{ if(t.status==='Open') t.status='Cancelled'; });
-  crmSetStatus(r,'Declined',reason); crmLog(r,'Decline reason recorded',reason);
-  crmSave(); closeLayer(); paintBody(); toast('Creator declined. Find a replacement on the shortlist.');
-}
-/* ── Tasks ── */
-function crmTaskAdd(id){
-  const r=crmRec(id), title=(document.getElementById('crmTaskTitle').value||'').trim(), owner=document.getElementById('crmTaskOwner').value, due=document.getElementById('crmTaskDue').value;
-  if(!title) return toast('Enter a follow-up title');
-  if(!due) return toast('Set a due date');
-  if(due<TODAY) return toast('Due date cannot be in the past');
-  r.tasks.unshift({id:crmUid('t'),title,owner,due,status:'Open',created:TODAY});
-  crmLog(r,'Follow-up added',`${title} · due ${campDate(due)}`); crmSave(); paintBody(); toast('Follow-up added');
-}
-function crmTaskDone(id,tid){ const r=crmRec(id), t=r.tasks.find(x=>x.id===tid); t.status='Done'; crmLog(r,'Follow-up completed',t.title); crmSave(); paintBody(); toast('Follow-up completed'); }
-function crmTaskCancel(id,tid){ const r=crmRec(id), t=r.tasks.find(x=>x.id===tid); t.status='Cancelled'; crmLog(r,'Follow-up cancelled',t.title); crmSave(); paintBody(); toast('Follow-up cancelled'); }
-function crmTaskReschedule(id,tid){
-  const r=crmRec(id), t=r.tasks.find(x=>x.id===tid);
-  dlg('Reschedule follow-up',esc(t.title),`<label class="ds-field"><span>New due date</span><input id="crmRsD" type="date" value="${t.due}" min="${TODAY}"></label>`,
-    `<button class="ds-btn ds-btn--outline" onclick="closeLayer()">Cancel</button><button class="ds-btn ds-btn--primary" onclick="crmTaskReschedApply('${id}','${tid}')">Reschedule</button>`);
-}
-function crmTaskReschedApply(id,tid){ const r=crmRec(id), t=r.tasks.find(x=>x.id===tid), d=dlgVal('crmRsD'); if(!d||d<TODAY) return toast('Pick a date from today'); const from=t.due; t.due=d; crmLog(r,'Follow-up rescheduled',t.title,campDate(from),campDate(d)); crmSave(); closeLayer(); paintBody(); toast('Follow-up rescheduled'); }
-/* ── Negotiation ── */
-function crmOfferOpen(id,kind){
-  const r=crmRec(id); const c=crOf(r.creatorId)||{name:'Creator'};
-  const by=kind==='Counteroffer'?'Creator':'Brand';
-  dlg(kind==='Counteroffer'?'Record counteroffer':'Record offer',`${esc(c.name)}. Older offers are kept in the history.`,
-    `<label class="ds-field"><span>Amount (₹)</span><input id="crmOA" type="number" min="1" placeholder="e.g. 40000"></label>
-     <label class="ds-field"><span>Proposed by</span><select id="crmOB">${['Brand','Creator'].map(x=>`<option ${x===by?'selected':''}>${x}</option>`).join('')}</select></label>
-     <label class="ds-field"><span>Deliverables</span><input id="crmOD" value="${esc(r.terms.deliverables||`${r.terms.posts||1} × ${r.terms.format}`)}"></label>
-     <label class="ds-field"><span>Notes</span><textarea id="crmON" rows="2"></textarea></label>
-     <p class="ds-caption">Planned rate for this creator: ${rupees(r.estimate)}. Amounts above it need approval.</p>`,
-    `<button class="ds-btn ds-btn--outline" onclick="closeLayer()">Cancel</button><button class="ds-btn ds-btn--primary" onclick="crmOfferSave('${id}','${kind}')">Save ${kind==='Counteroffer'?'counteroffer':'offer'}</button>`);
-}
-function crmOfferSave(id,kind){
-  const r=crmRec(id), amt=Number(dlgVal('crmOA'))||0, by=dlgVal('crmOB'), del=dlgVal('crmOD'), notes=dlgVal('crmON');
-  if(amt<=0) return toast('Enter an amount');
-  r.offers.forEach(o=>{ if(o.status==='Open') o.status='Superseded'; });
-  r.offers.push({id:crmUid('o'),at:TODAY,by,kind:kind||(by==='Creator'?'Counteroffer':'Offer'),amount:amt,deliverables:del,notes,status:'Open'});
-  if(by==='Creator') r.quote=amt;
-  if(amt>r.estimate){ r.approval={status:'Pending',requested:amt,planned:r.estimate,note:`Above the planned rate by ${rupees(amt-r.estimate)}`}; }
-  else r.approval=null;
-  if(r.status!=='Negotiating'){ crmSetStatus(r,'Negotiating','Offer recorded'); }
-  crmLog(r,kind||'Offer recorded',`${by} · ${rupees(amt)}${amt>r.estimate?' · approval required':''}${notes?' · '+notes:''}`);
-  crmSave(); closeLayer(); paintBody(); toast(amt>r.estimate?'Offer recorded. Approval required before terms can be accepted.':'Offer recorded');
-}
-function crmOfferAccept(id){
-  const r=crmRec(id), o=crmOpenOffer(r);
-  if(!o) return toast('No open offer to accept');
-  if(r.approval&&r.approval.status!=='Approved'){ crmOverride(r,`Terms accepted while approval is ${r.approval.status}`); }
-  o.status='Accepted'; crmLog(r,'Terms accepted',`${o.by}’s offer of ${rupees(o.amount)}`); crmSave(); paintBody(); toast('Terms accepted. Confirm the agreement to continue.');
-}
-function crmOfferReject(id){ const r=crmRec(id), o=crmOpenOffer(r); if(!o) return; o.status='Rejected'; crmLog(r,'Terms rejected',rupees(o.amount)); crmSave(); paintBody(); toast('Offer rejected. Record a counteroffer.'); }
-function crmConfirmOpen(id){
-  const r=crmRec(id), acc=r.offers.find(o=>o.status==='Accepted'), amt=acc?acc.amount:(r.quote||r.estimate||0);
-  const warn=[]; if(!acc) warn.push('No accepted offer. The agreed fee is taken from the quote.'); if(r.approval&&r.approval.status!=='Approved') warn.push(`Commercial approval is ${r.approval.status}. This is recorded as an override.`);
-  dlg('Confirm agreement',`This saves the agreed fee and terms and moves the creator to Agreed. Onboarding opens next.`,
-    `<dl class="pl-rv-grid">${planRv('Agreed fee',`<b>${rupees(amt)}</b>`)}${planRv('Deliverables',planTxt(acc?acc.deliverables:r.terms.deliverables))}${planRv('Planned rate',rupees(r.estimate))}${planRv('Budget effect',amt>r.estimate?`+${rupees(amt-r.estimate)} over planned`:'Within planned rate')}</dl>${warn.map(w=>`<div class="ds-note ds-note--warn">${esc(w)}</div>`).join('')}`,
-    `<button class="ds-btn ds-btn--outline" onclick="closeLayer()">Cancel</button><button class="ds-btn ds-btn--primary" onclick="crmConfirm('${id}')">Confirm agreement</button>`);
-}
-function crmConfirm(id){
-  const r=crmRec(id), acc=r.offers.find(o=>o.status==='Accepted'), amt=acc?acc.amount:(r.quote||r.estimate||0);
-  if(!acc) crmOverride(r,'Agreement confirmed without an accepted offer');
-  if(r.approval&&r.approval.status!=='Approved') crmOverride(r,`Agreement confirmed while approval is ${r.approval.status}`);
-  r.agreed=amt; if(acc) r.terms.deliverables=acc.deliverables||r.terms.deliverables;
-  crmSetStatus(r,'Agreed','Agreement confirmed'); crmLog(r,'Agreement confirmed',`Agreed fee ${rupees(amt)}`);
-  crmSave(); closeLayer(); paintBody(); toast('Agreement confirmed. Move to onboarding is now enabled.');
-}
-function crmApprovalDecide(id,dec){
-  const r=crmRec(id), label={Approved:'Approve the negotiated fee',Revision:'Request a revision',Rejected:'Reject the negotiated fee'}[dec];
-  dlg('Commercial approval',`${label}: ${rupees(r.approval.requested)} against a planned ${rupees(r.approval.planned)}.`,'',
-    `<button class="ds-btn ds-btn--outline" onclick="closeLayer()">Cancel</button><button class="${dec==='Rejected'?'ds-btn ds-btn--danger':'ds-btn ds-btn--primary'}" onclick="crmApprovalApply('${id}','${dec}')">${label}</button>`);
-}
-function crmApprovalApply(id,dec){
-  const r=crmRec(id); const from=r.approval.status; r.approval.status=dec;
-  if(dec==='Rejected'){ const o=crmOpenOffer(r); if(o) o.status='Rejected'; }
-  if(dec==='Approved'){ /* open offer stays open and can now be accepted */ }
-  crmLog(r,'Approval decision',dec==='Approved'?'Approved':dec==='Revision'?'Revision requested':'Rejected',from,dec);
-  crmSave(); closeLayer(); paintBody(); toast(dec==='Approved'?'Approved. The terms can now be accepted.':dec==='Revision'?'Revision requested from the team':'Rejected. Record a new offer or decline.');
-}
-function crmTermsOpen(id){
-  const r=crmRec(id), t=r.terms;
-  dlg('Edit terms','Changes are recorded in the activity history.',
-    `<div class="cc-grid"><label class="ds-field"><span>Deliverables</span><input id="crmTD" value="${esc(t.deliverables)}"></label>
-     <label class="ds-field"><span>Platform</span><select id="crmTP">${['Instagram','YouTube','TikTok'].map(x=>`<option ${x===t.platform?'selected':''}>${x}</option>`).join('')}</select></label>
-     <label class="ds-field"><span>Number of posts</span><input id="crmTN" type="number" min="1" value="${t.posts}"></label>
-     <label class="ds-field"><span>Format</span><select id="crmTF">${['Reel','Post','Carousel','Story'].map(x=>`<option ${x===t.format?'selected':''}>${x}</option>`).join('')}</select></label>
-     <label class="ds-field"><span>Usage rights</span><input id="crmTU" value="${esc(t.usage)}"></label>
-     <label class="ds-field"><span>Licensing duration</span><input id="crmTL" value="${esc(t.licence)}"></label>
-     <label class="ds-field"><span>Exclusivity</span><input id="crmTE" value="${esc(t.exclusivity)}"></label>
-     <label class="ds-field"><span>Payment terms</span><input id="crmTPay" value="${esc(t.payment)}"></label>
-     <label class="ds-field"><span>Expected publish date</span><input id="crmTPD" type="date" value="${t.publishDate||''}"></label></div>`,
-    `<button class="ds-btn ds-btn--outline" onclick="closeLayer()">Cancel</button><button class="ds-btn ds-btn--primary" onclick="crmTermsSave('${id}')">Save terms</button>`);
-}
-function crmTermsSave(id){
-  const r=crmRec(id), t=r.terms, next={deliverables:dlgVal('crmTD'),platform:dlgVal('crmTP'),posts:Number(dlgVal('crmTN'))||1,format:dlgVal('crmTF'),usage:dlgVal('crmTU'),licence:dlgVal('crmTL'),exclusivity:dlgVal('crmTE'),payment:dlgVal('crmTPay'),publishDate:dlgVal('crmTPD')};
-  const labels={deliverables:'Deliverables',platform:'Platform',posts:'Posts',format:'Format',usage:'Usage rights',licence:'Licensing',exclusivity:'Exclusivity',payment:'Payment terms',publishDate:'Publish date'};
-  const changed=Object.keys(next).filter(k=>String(next[k])!==String(t[k]||''));
-  if(!changed.length){ closeLayer(); return toast('No changes'); }
-  const deadline=changed.includes('publishDate');
-  changed.forEach(k=>crmLog(r,deadline&&k==='publishDate'?'Deadline revised':'Terms edited',labels[k],String(t[k]||'—'),String(next[k]||'—')));
-  r.terms=next; crmSave(); closeLayer(); paintBody(); toast('Terms saved');
-}
-
-/* ── Set status (any status, any order) ── */
-function crmJumpOpen(id){
-  const r=crmRec(id); if(!r) return;
-  dlg('Set status',`Move ${esc(cNameOf(r.creatorId))} to any stage. The change and your note are saved to the activity log.`,
-    `<label class="ds-field"><span>Status</span><select id="crmJumpTo">${CRM_OUT.map(x=>`<option ${x===r.status?'selected':''}>${x}</option>`).join('')}</select></label>
-     <label class="ds-field"><span>Note (optional)</span><input id="crmJumpNote" placeholder="Why the status changed"></label>`,
-    `<button class="ds-btn ds-btn--outline" onclick="closeLayer()">Cancel</button><button class="ds-btn ds-btn--primary" onclick="crmJumpApply('${id}')">Save status</button>`);
-}
-function crmJumpApply(id){
-  const r=crmRec(id), to=dlgVal('crmJumpTo'), note=(dlgVal('crmJumpNote')||'').trim();
-  if(!r||!to) return; if(to===r.status){ closeLayer(); return toast('Status unchanged'); }
-  crmSetStatus(r,to,note||'Status set manually'); crmSave(); closeLayer(); paintBody(); toast(`Status set to ${to}`);
-}
-
-/* ════════ CRM · onboarding, campaign creation ════════ */
-const CRM_SECS=[['agreement','Agreement'],['contract','Contract'],['creator','Creator details'],['seeding','Product seeding'],['brief','Brief acknowledgement']];
-function crmGoSec(k){ S.crmSec=k; paintBody(); setTimeout(()=>{ const el=document.getElementById('crm-sec-'+k); if(el) el.scrollIntoView({block:'start',behavior:'smooth'}); },0); }
-function crmStartOnb(id){ const r=crmRec(id); if(!r.onb.started){ r.onb.started=true; crmLog(r,'Onboarding started','',null,'In progress'); crmSave(); } crmOpenOnb(id); }
-function crmOnboardingDetailHTML(){
-  const r=crmRec(S.crmRecId); if(!r) return crmNotFound('Onboarding record');
-  const c=crOf(r.creatorId)||{name:'Unknown',handle:''}, p=planOf(r.planId)||{name:'—',product:''}, o=r.onb;
-  const blk=crmBlockers(r), ready=crmReady(r), sec=S.crmSec||'agreement', st=crmOnbState(r), pr=crmOnbProgress(r);
-  const top=r.withdrawn?`<div class="ds-note ds-note--warn crm-block"><b>Creator withdrew after agreement.</b> Recovery: reinstate the creator, or send a replacement from the shortlist.<div class="crm-actbar"><button class="ds-btn ds-btn--outline ds-btn--sm" onclick="crmReinstate('${r.id}')">Reinstate creator</button><button class="ds-btn ds-btn--outline ds-btn--sm" onclick="crmOpenPlan('${p.id}')">Find replacement</button></div></div>`
-    :ready?`<div class="crm-ready"><div><b>Ready for Activation</b><span>All mandatory onboarding items are complete.</span></div>${r.campId?`<button class="ds-btn ds-btn--primary ds-btn--sm" onclick="crmOpenAct('${r.campId}')">Open activation</button>`:`<button class="ds-btn ds-btn--primary ds-btn--sm" onclick="crmCampaignOpen('${p.id}',['${r.id}'])">Create campaign</button>`}</div>`
-    :`<div class="crm-block"><b>${esc(crmBlockMsg(r))}</b><ul>${blk.map(b=>`<li><button class="link" onclick="crmGoSec('${b.sec}')">${esc(b.t)} →</button></li>`).join('')}</ul></div>`;
-  const nav=`<nav class="crm-secnav" aria-label="Onboarding sections">${CRM_SECS.map(([k,l],i)=>`<button type="button" class="${sec===k?'on':''}" onclick="crmGoSec('${k}')">${i+1}. ${l}</button>`).join('')}</nav>`;
-  const body={agreement:()=>crmSecAgreement(r,p),contract:()=>crmSecContract(r),creator:()=>crmSecCreator(r),seeding:()=>crmSecSeeding(r),brief:()=>crmSecBrief(r,p)};
-  const sections=CRM_SECS.map(([k,l])=>`<section class="crm-card crm-sec" id="crm-sec-${k}"><div class="crm-card-h"><h3>${CRM_SECS.findIndex(x=>x[0]===k)+1}. ${l}</h3>${crmPill(k==='contract'?o.contract:k==='seeding'?o.seed.status:k==='brief'?(o.briefAck?'Acknowledged':'Pending'):k==='creator'?((o.contact.email&&o.contact.phone)?'Complete':'Incomplete'):'Agreed')}</div>${body[k]()}</section>`).join('');
-  return `<div class="ds-page crm-detail">
-    <div class="crumb"><button class="link" onclick="crmGo('crm')">CRM</button> / <button class="link" onclick="crmGo('crm-onboarding')">Onboarding</button> / <span>${esc(c.name)}</span></div>
-    <header class="cdh crm-dh"><div class="cdh-top">
-      <button class="ds-dh-back" aria-label="Back to Onboarding" onclick="crmGo('crm-onboarding')">${dsBackSvg}</button>
-      ${dsAv(c.id,c.name)}
-      <div class="cdh-main"><div class="cdh-title"><h1>${esc(c.name)}</h1>${crmPill(st)}${crmPill(crmStage(r)||'Declined')}</div>
-        <div class="cdh-meta">${esc(p.name)} · ${esc(p.product||'')} · Agreed ${rupees(r.agreed||0)} · Progress ${pr.n}/${pr.t}</div></div>
-      <div class="cdh-actions"><button class="ds-btn ds-btn--outline ds-btn--sm" onclick="crmOpenRec('${r.id}')">Outreach record</button>${!r.withdrawn&&!r.campId?`<details class="ds-more"><summary class="ds-btn ds-btn--outline ds-btn--sm" aria-label="More onboarding actions">⋯</summary><div class="ds-more-menu"><button class="is-danger" onclick="crmWithdrawOpen('${r.id}')">Creator withdraws</button></div></details>`:''}</div>
-    </div></header>
-    ${top}${nav}
-    ${sections}
-  </div>`;
-}
-function crmSecAgreement(r,p){
-  const t=r.terms;
-  return `<div class="crm-actbar"><button class="ds-btn ds-btn--outline ds-btn--sm" onclick="crmTermsOpen('${r.id}')">Edit agreement</button><button class="ds-btn ds-btn--ghost ds-btn--sm" onclick="crmTermsOpen('${r.id}')">Revise deadline</button></div>
-  <dl class="pl-rv-grid">${planRv('Agreed fee',`<b>${rupees(r.agreed||0)}</b>`)}${planRv('Deliverables',planTxt(t.deliverables))}${planRv('Platform',planTxt(t.platform))}${planRv('Posts',planTxt(t.posts))}${planRv('Format',planTxt(t.format))}${planRv('Usage rights',planTxt(t.usage))}${planRv('Exclusivity',planTxt(t.exclusivity))}${planRv('Payment terms',planTxt(t.payment))}${planRv('Publishing date',t.publishDate?campDate(t.publishDate):'<span class="pl-rv-none">Not set</span>')}</dl>`;
-}
-function crmSecContract(r){
-  const o=r.onb, steps=['Not Created','Prepared','Sent','Signed'], cur=o.contract;
-  const idx=steps.indexOf(cur);
-  const acts={'Not Created':[['Create contract','create']],'Prepared':[['Upload contract','upload'],['Send for signature','send']],'Sent':[['Mark signed','sign'],['Request revision','revise'],['Mark rejected','reject']],'Revision Requested':[['Prepare revised contract','create']],'Rejected':[['Create new contract','create']],'Signed':[]}[cur]||[];
-  return `<div class="crm-steps">${steps.map((s,i)=>`<span class="crm-step ${i<=idx?'done':''} ${s===cur?'cur':''}">${s}</span>`).join('<i></i>')}</div>
-    ${cur==='Revision Requested'?'<div class="ds-note ds-note--warn">Contract revision requested. Prepare a revised contract.</div>':''}
-    ${cur==='Rejected'?'<div class="ds-note ds-note--warn">The creator rejected the contract. Create a new one or record a negotiated change.</div>':''}
-    ${o.contractFile?`<p class="ds-caption">Contract file: ${esc(o.contractFile)}</p>`:''}
-    <div class="crm-actbar"><label class="ds-field crm-inline"><span>Set state</span><select onchange="crmContractSet('${r.id}',this.value)">${CRM_CONTRACT.map(x=>`<option ${x===cur?'selected':''}>${x}</option>`).join('')}</select></label></div>
-    <div class="crm-actbar">${acts.map(([l,k])=>`<button class="ds-btn ${k==='sign'||k==='create'?'ds-btn--primary':'ds-btn--outline'} ds-btn--sm" onclick="crmContract('${r.id}','${k}')">${l}</button>`).join('')}</div>
-    <p class="ds-caption">Contract generation and signature are simulated.</p>`;
-}
-function crmContract(id,act){
-  const r=crmRec(id), o=r.onb, from=o.contract;
-  const to={create:'Prepared',send:'Sent',sign:'Signed',revise:'Revision Requested',reject:'Rejected'};
-  if(act==='upload'){
-    dlg('Upload contract','Simulated upload. The file name is stored on this record.',`<label class="ds-field"><span>Contract file</span><input id="crmCF" value="${esc(crOf(r.creatorId).name.split(' ')[0])}_contract_v${(o.contractLog||[]).length+1}.pdf"></label>`,
-      `<button class="ds-btn ds-btn--outline" onclick="closeLayer()">Cancel</button><button class="ds-btn ds-btn--primary" onclick="crmContractUpload('${id}')">Upload</button>`);
-    return;
-  }
-  if(act==='create'){ o.contractFile=`${crOf(r.creatorId).name.split(' ')[0]}_contract_v${(o.contractLog||[]).length+1}.pdf`; }
-  if(act==='send'&&!o.contractFile) crmOverride(r,'Sent for signature with no contract file');
-  if(act==='sign'&&!o.contractFile) crmOverride(r,'Signed with no contract file');
-  o.contract=to[act];
-  o.contractLog=[...(o.contractLog||[]),{at:crmNow(),from,to:o.contract}];
-  crmLog(r,'Contract '+({create:'prepared',send:'sent for signature',sign:'marked signed',revise:'revision requested',reject:'marked rejected'})[act],'',from,o.contract);
-  crmSave(); paintBody(); toast(`Contract: ${o.contract}`);
-}
-function crmContractUpload(id){ const r=crmRec(id); r.onb.contractFile=dlgVal('crmCF')||r.onb.contractFile; crmLog(r,'Contract uploaded',r.onb.contractFile); crmSave(); closeLayer(); paintBody(); toast('Contract uploaded'); }
-function crmSecCreator(r){
-  const c=r.onb.contact, errs=CRM_CONTACT_ERR(c);
-  const f=(k,l,v,ph,type='text')=>`<label class="ds-field"><span>${l}</span><input id="crmK_${k}" type="${type}" value="${esc(v||'')}" placeholder="${ph||''}"></label>`;
-  return `<div class="cc-grid">${f('name','Contact name',c.name,'Full name')}${f('email','Email',c.email,'name@domain.com','email')}${f('phone','Contact number',c.phone,'10-digit mobile')}
-    ${f('rep','Representative (if any)',c.rep,'Manager name and email')}
-    <label class="ds-field ds-form-wide"><span>Shipping address ${r.onb.seed.status==='Not Required'?'(optional)':'(needed for product seeding)'}</span><textarea id="crmK_ship" rows="2">${esc(c.shipping||'')}</textarea></label></div>
-    ${errs.length?`<div class="ds-note ds-note--warn">${errs.map(esc).join(' · ')}</div>`:''}
-    <div class="crm-actbar"><button class="ds-btn ds-btn--primary ds-btn--sm" onclick="crmContactSave('${r.id}')">Save creator details</button></div>
-    `;
-}
-function crmContactSave(id){
-  const r=crmRec(id), n={name:dlgVal('crmK_name')||(document.getElementById('crmK_name')||{}).value||'',email:(document.getElementById('crmK_email')||{}).value||'',phone:(document.getElementById('crmK_phone')||{}).value||'',rep:(document.getElementById('crmK_rep')||{}).value||'',shipping:(document.getElementById('crmK_ship')||{}).value||''};
-  n.name=n.name.trim(); n.email=n.email.trim(); n.phone=n.phone.replace(/\s+/g,'');
-  const errs=CRM_CONTACT_ERR(n); if(errs.length&&(n.name||n.email||n.phone)&&errs.some(e=>!e.startsWith('Enter a contact'))){ /* keep saving entered values, validation shown as blocker */ }
-  const changed=Object.keys(n).filter(k=>n[k]!==(r.onb.contact[k]||''));
-  r.onb.contact=n; if(changed.length) crmLog(r,'Creator details updated',changed.join(', '));
-  crmSave(); paintBody(); toast(errs.length?'Saved. Missing: '+errs.join(', '):'Creator details saved');
-}
-function crmSecSeeding(r){
-  const s=r.onb.seed, late=(s.status==='Dispatched'||s.status==='In Transit')&&s.dispatch&&s.dispatch<crmDue(-5);
-  const f=(k,l,v,type='text')=>`<label class="ds-field"><span>${l}</span><input id="crmS_${k}" type="${type}" value="${esc(v||'')}"></label>`;
-  return `<div class="cc-grid"><label class="ds-field"><span>Product</span><input value="${esc(planOf(r.planId)?.product||'')}" disabled></label>
-    ${f('qty','Quantity',s.qty,'number')}
-    <label class="ds-field"><span>Status</span><select id="crmS_status">${CRM_SEED.map(x=>`<option ${x===s.status?'selected':''}>${x}</option>`).join('')}</select></label>
-    ${f('courier','Courier',s.courier)}${f('tracking','Tracking number',s.tracking)}${f('dispatch','Dispatch date',s.dispatch,'date')}${f('delivery','Delivery date',s.delivery,'date')}
-    <label class="ds-field ds-check-row"><span>Delivery confirmed</span><input id="crmS_conf" type="checkbox" ${s.confirmed?'checked':''}></label></div>
-    ${late?`<div class="ds-note ds-note--warn">Delivery delayed: dispatched ${campDate(s.dispatch)}, still not delivered. Recovery: contact the courier or resend.</div>`:''}
-    ${s.status==='Issue'?'<div class="ds-note ds-note--warn">Delivery issue reported. Resend the shipment once it is resolved.</div>':''}
-    <div class="crm-actbar"><button class="ds-btn ds-btn--primary ds-btn--sm" onclick="crmSeedSave('${r.id}')">Save seeding</button>
-      ${s.status==='Issue'||late?`<button class="ds-btn ds-btn--outline ds-btn--sm" onclick="crmSeedResend('${r.id}')">Resend shipment</button>`:''}
-      ${s.status==='Not Required'?'':`<button class="ds-btn ds-btn--ghost ds-btn--sm" onclick="crmSeedSet('${r.id}','Not Required')">Digital only: not required</button>`}</div>`;
-}
-function crmSeedSave(id){
-  const r=crmRec(id), st=dlgVal('crmS_status')||(document.getElementById('crmS_status')||{}).value, g=k=>(document.getElementById('crmS_'+k)||{}).value||'';
-  const n={status:st,qty:Number(g('qty'))||1,courier:g('courier'),tracking:g('tracking'),dispatch:g('dispatch'),delivery:g('delivery'),confirmed:!!(document.getElementById('crmS_conf')||{}).checked};
-  if((st==='Dispatched'||st==='In Transit')&&(!n.courier||!n.tracking)) return toast('Add courier and tracking number before dispatch');
-  if(st==='Delivered'&&!n.delivery) return toast('Add the delivery date');
-  const from=r.onb.seed.status; r.onb.seed=n;
-  if(from!==st) crmLog(r,'Product seeding',st,from,st); else crmLog(r,'Product seeding updated','');
-  crmSave(); paintBody(); toast('Seeding saved');
-}
-function crmSeedSet(id,st){ const r=crmRec(id); const from=r.onb.seed.status; r.onb.seed.status=st; crmLog(r,'Product seeding',st,from,st); crmSave(); paintBody(); toast(`Seeding: ${st}`); }
-function crmSeedResend(id){ const r=crmRec(id); const from=r.onb.seed.status; r.onb.seed={...r.onb.seed,status:'Pending',dispatch:'',delivery:'',tracking:'',confirmed:false}; crmLog(r,'Shipment resent','Recovery action',from,'Pending'); crmSave(); paintBody(); toast('Shipment reset to Pending. Dispatch again when ready.'); }
-function crmSecBrief(r,p){
-  const cont=p.content||{}, o=r.onb, open=o.clarify.filter(x=>!x.done);
-  return `<dl class="pl-rv-grid">${planRv('Brief',planTxt(p.productNotes||p.brief))}${planRv('Must cover',planChips(cont.mustCover))}${planRv('Restrictions',planChips(cont.mustAvoid))}${planRv('Brand messaging',planChips(cont.keyMessages))}${planRv('Tone',planTxt(cont.tone))}${planRv('Due date',r.terms.publishDate?campDate(r.terms.publishDate):'<span class="pl-rv-none">Not set</span>')}${planRv('Acknowledgement',o.briefAck?'<span class="crm-ok">Acknowledged by creator</span>':o.briefShared?'Shared, awaiting acknowledgement':'<span class="pl-rv-none">Not shared yet</span>')}</dl>
-    ${open.length?`<div class="crm-clar"><b>Open clarifications</b>${open.map(x=>`<div class="crm-clar-i"><span>${esc(x.text)}</span><button class="ds-btn ds-btn--ghost ds-btn--sm" onclick="crmClarifyResolve('${r.id}','${x.id}')">Mark resolved</button></div>`).join('')}</div>`:''}
-    <div class="crm-actbar">
-      <button class="ds-btn ds-btn--outline ds-btn--sm" ${o.briefShared?'disabled':''} onclick="crmBriefShare('${r.id}')">Share brief</button>
-      <button class="ds-btn ds-btn--primary ds-btn--sm" ${o.briefAck?'disabled':''} onclick="crmBriefAck('${r.id}')">Record acknowledgement</button>
-      <button class="ds-btn ds-btn--outline ds-btn--sm" onclick="crmClarifyOpen('${r.id}')">Request clarification</button>
-      <button class="ds-btn ds-btn--ghost ds-btn--sm" ${o.briefAck&&!o.briefDone?'':'disabled'} onclick="crmBriefDone('${r.id}')">Mark completed</button>
-    </div>`;
-}
-function crmBriefShare(id){ const r=crmRec(id); r.onb.briefShared=true; crmLog(r,'Brief shared','Shared with creator'); crmSave(); paintBody(); toast('Brief shared'); }
-function crmBriefAck(id){
-  const r=crmRec(id);
-  if(!r.onb.briefShared) crmOverride(r,'Acknowledged before the brief was shared');
-  if(r.onb.clarify.some(x=>!x.done)) crmOverride(r,'Acknowledged with open clarifications');
-  r.onb.briefAck=true; crmLog(r,'Brief acknowledged','Creator acknowledged the brief'); crmSave(); paintBody(); toast('Acknowledgement recorded');
-}
-function crmBriefDone(id){ const r=crmRec(id); r.onb.briefDone=true; crmLog(r,'Brief section completed',''); crmSave(); paintBody(); toast('Brief section completed'); }
-function crmClarifyOpen(id){ dlg('Request clarification','The creator must respond before acknowledging the brief.',`<label class="ds-field"><span>Question for the creator</span><textarea id="crmCq" rows="3" placeholder="e.g. Can the Reel include the 2-step routine?"></textarea></label>`,`<button class="ds-btn ds-btn--outline" onclick="closeLayer()">Cancel</button><button class="ds-btn ds-btn--primary" onclick="crmClarifySave('${id}')">Send clarification</button>`); }
-function crmClarifySave(id){ const r=crmRec(id), t=dlgVal('crmCq'); if(!t) return toast('Write the question'); r.onb.clarify.push({id:crmUid('q'),text:t,done:false}); r.onb.briefAck=false; crmLog(r,'Clarification requested',t); crmSave(); closeLayer(); paintBody(); toast('Clarification requested'); }
-function crmClarifyResolve(id,qid){ const r=crmRec(id), q=r.onb.clarify.find(x=>x.id===qid); if(q) q.done=true; crmLog(r,'Clarification resolved',q?q.text:''); crmSave(); paintBody(); }
-function crmWithdrawOpen(id){ dlg('Creator withdraws','The creator is marked as withdrawn. Their history is kept, and you can reinstate them or find a replacement.',``,`<button class="ds-btn ds-btn--outline" onclick="closeLayer()">Cancel</button><button class="ds-btn ds-btn--danger" onclick="crmWithdraw('${id}')">Confirm withdrawal</button>`); }
-function crmWithdraw(id){ const r=crmRec(id); r.withdrawn=true; crmLog(r,'Creator withdrew after agreement','Recovery: reinstate or replace'); crmSave(); closeLayer(); paintBody(); toast('Creator withdrawn'); }
-function crmReinstate(id){ const r=crmRec(id); r.withdrawn=false; crmLog(r,'Creator reinstated',''); crmSave(); paintBody(); toast('Creator reinstated'); }
-/* ── Campaign creation ── */
-function crmCampaignOpen(planId,recIds){
-  const p=planOf(planId); if(!p) return;
-  const recs=recIds.map(crmRec).filter(Boolean);
-  const notAgreed=recs.filter(r=>r.status!=='Agreed'||r.withdrawn);
-  if(!recs.length) return toast('Select at least one agreed creator');
-  if(notAgreed.length) return toast(`Only agreed creators can join a campaign. Not agreed: ${notAgreed.map(r=>cNameOf(r.creatorId)).join(', ')}`);
-  const existing=CAMP_LIST.find(c=>c.crm&&c.crm.planId===planId);
-  if(existing){
-    const add=recs.filter(r=>!r.campId);
-    dlg('A campaign already exists',`${esc(p.name)} already has a campaign. Do not create a duplicate.`,
-      `<div class="ds-note">${esc(existing.name)}${add.length?` · ${add.length} creator${add.length>1?'s':''} can be added`:' · all selected creators are already in it'}</div>`,
-      `<button class="ds-btn ds-btn--outline" onclick="crmOpenAct('${existing.id}');closeLayer()">Open existing campaign</button>${add.length?`<button class="ds-btn ds-btn--primary" onclick="crmAddToCampaign('${existing.id}',[${add.map(r=>`'${r.id}'`).join(',')}])">Add creators to existing campaign</button>`:''}`);
-    return;
-  }
-  const cats=['Beauty','Wellness','Lifestyle','Fashion','Tech','Skincare'];
-  const aud=planAges(p).join(', ')||'Any age';
-  const rows=recs.map(r=>{ const c=crOf(r.creatorId)||{name:'Creator'}; return `<tr><td>${crmNameCell(c,'')}</td><td class="ds-num">${rupees(r.agreed||0)}</td><td class="ds-num">${r.terms.posts||1}</td><td><input type="date" class="crm-in crm-date" id="crmPD_${r.id}" value="${r.terms.publishDate||crmDue(14)}" aria-label="Publish date for ${esc(c.name)}"></td></tr>`; }).join('');
-  dlg('Create campaign from shortlist',`Prefilled from ${esc(p.name)}. Review and edit before creating.`,
-    `<div class="cc-form"><section class="cc-sec"><h4>Details</h4><div class="cc-grid">
-      ${dlgFld('Campaign name','fname',`${p.name.replace(/ plan$/i,'')} campaign`)}${dlgFld('Product','fproduct',p.product||'')}
-      ${dlgSel('Category','fcategory',cats,'Beauty')}${dlgFld('Budget (₹)','fbudget',p.budget||0,'number')}
-      ${dlgFld('Planned posts','fposts',recs.reduce((s,r)=>s+(r.terms.posts||1),0),'number')}${dlgSel('Status','fstatus',['Active','Draft'],'Active')}
-      <label class="ds-field"><span>Objective</span><input value="${esc(p.objective||'')}" disabled></label><label class="ds-field"><span>Audience</span><input value="${esc(aud)}" disabled></label></div></section>
-      <section class="cc-sec"><h4>Creators and fees</h4><div class="ds-table-wrap"><table class="ds-table crm-table-sm"><thead><tr><th>Creator</th><th class="ds-num">Agreed fee</th><th class="ds-num">Posts</th><th>Publish date</th></tr></thead><tbody>${rows}</tbody></table></div><p class="ds-caption">Agreed fees carry over. Creators keep their negotiated terms and onboarding status.</p></section></div>`,
-    `<button class="ds-btn ds-btn--outline" onclick="closeLayer()">Cancel</button><button class="ds-btn ds-btn--primary" onclick="crmCreateCampaign('${planId}',[${recIds.map(i=>`'${i}'`).join(',')}])">Create campaign</button>`);
-}
-function crmCreateCampaign(planId,recIds){
-  const p=planOf(planId), name=dlgVal('fname');
-  if(!name) return toast('Enter a campaign name');
-  const recs=recIds.map(crmRec).filter(Boolean);
-  const camp={id:'ca'+Date.now(),name,product:dlgVal('fproduct'),category:dlgVal('fcategory'),legacy:false,status:dlgVal('fstatus')||'Active',tracking:true,created:TODAY,budget:Number(dlgVal('fbudget'))||0,plannedVideos:Number(dlgVal('fposts'))||0,linedUp:0,manager:(recs[0]&&recs[0].owner)||'Karan',creatorIds:recs.map(r=>r.creatorId),posts:[],crm:{planId,source:'CRM',objective:p?p.objective:''}};
-  CAMP_LIST.unshift(camp);
-  if(p) p.stage='Active';
-  recs.forEach(r=>{ r.campId=camp.id; crmLog(r,'Added to campaign',camp.name,null,'Campaign'); crmMakeDeliverables(r,camp,document.getElementById('crmPD_'+r.id)?.value||r.terms.publishDate); });
-  crmSave(); closeLayer();
-  dlg('Campaign created',`${esc(name)} now appears in My campaigns and in CRM Campaign Activation.`,'',
-    `<button class="ds-btn ds-btn--outline" onclick="closeLayer();openCampaign('${camp.id}')">View campaign</button><button class="ds-btn ds-btn--primary" onclick="closeLayer();crmOpenAct('${camp.id}')">Continue to campaign activation</button>`);
-  paintBody(); toast('Campaign created');
-}
-function crmAddToCampaign(campId,recIds){
-  const camp=campOf(campId); if(!camp) return;
-  recIds.map(crmRec).filter(Boolean).forEach(r=>{ r.campId=campId; if(!camp.creatorIds.includes(r.creatorId)) camp.creatorIds.push(r.creatorId); crmLog(r,'Added to campaign',camp.name,null,'Campaign'); crmMakeDeliverables(r,camp,r.terms.publishDate); });
-  crmSave(); closeLayer(); paintBody(); toast('Creators added to the existing campaign');
-}
-
-/* ── Contract: any state, any order ── */
-function crmContractSet(id,to){
-  const r=crmRec(id); if(!r||r.onb.contract===to) return;
-  const from=r.onb.contract; r.onb.contract=to; r.onb.contractLog=[...(r.onb.contractLog||[]),{at:crmNow(),from,to}];
-  crmLog(r,'Contract state set',`${from} → ${to}`); crmSave(); paintBody(); toast(`Contract: ${to}`);
-}
-
-/* ════════ CRM · campaign activation, deliverables, review, publishing ════════ */
-const DEL_LIVE=['Approved','Scheduled','Published'];
-function crmMakeDeliverables(r,camp,due){
-  const n=Math.max(1,Number(r.terms.posts)||1);
-  for(let i=0;i<n;i++){
-    CRM.dels.push({id:crmUid('DL-'),recId:r.id,campId:camp.id,creatorId:r.creatorId,platform:r.terms.platform||'Instagram',format:r.terms.format||'Reel',desc:r.terms.deliverables||`${r.terms.format||'Reel'} for ${camp.product||'the campaign'}`,due:due||crmDue(14),status:'Not Started',submitted:null,publishDate:'',url:'',version:0,checks:[],comments:[],revisions:[],history:[]});
-  }
-}
-function crmDelOf(campId){ return CRM.dels.filter(d=>d.campId===campId); }
-function crmDelLog(d,to,note){ const from=d.status; d.status=to; d.history.unshift({at:crmNow(),from,to,note:note||''}); }
-const crmRecOfDel=d=>crmRec(d.recId);
-const crmReqs=(p)=>((p&&p.content&&p.content.mustCover)||[]);
-function crmActStatus(camp){ const d=crmDelOf(camp.id); if(!d.length) return 'Not started'; if(d.every(x=>x.status==='Published'||x.status==='Cancelled')) return 'Complete'; if(d.some(x=>x.status!=='Not Started')) return 'In progress'; return 'Ready to start'; }
-/* ── Activation list ── */
-function crmActListHTML(){
-  const camps=CAMP_LIST.filter(c=>c.crm), f=S.crmActF||'All', q=(S.crmActQ||'').toLowerCase().trim();
-  const rows=camps.filter(c=>(f==='All'||crmActStatus(c)===f)&&(!q||c.name.toLowerCase().includes(q)||(c.product||'').toLowerCase().includes(q)));
-  const tr=rows.map(c=>{ const d=crmDelOf(c.id), recs=crmRecsOfCamp(c.id), ready=recs.filter(r=>crmReady(r)||r.onb.activated).length;
-    const pending=d.filter(x=>!DEL_LIVE.includes(x.status)&&x.status!=='Cancelled').length, appr=d.filter(x=>DEL_LIVE.includes(x.status)).length, pub=d.filter(x=>x.status==='Published').length;
-    const end=d.map(x=>x.due).sort().pop()||c.created;
-    return `<tr><td><button class="ds-namebtn" onclick="crmOpenAct('${c.id}')">${esc(c.name)}</button><div class="ds-table-meta">${esc(c.status)}</div></td><td>${esc(c.product||'')}</td><td>${campDate(c.created)} – ${campDate(end)}</td>
-      <td class="ds-num">${recs.length}</td><td class="ds-num">${ready}</td><td class="ds-num">${pending}</td><td class="ds-num">${appr}</td><td class="ds-num">${pub}</td><td>${crmPill(crmActStatus(c))}</td>
-      <td class="ds-sticky-r"><button class="ds-btn ds-btn--outline ds-btn--sm" onclick="crmOpenAct('${c.id}')">Open</button></td></tr>`; }).join('');
-  const body=!camps.length?crmEmpty('No active campaigns yet','Campaigns appear here after you create one from a shortlist with agreed creators.',`<button class="ds-btn ds-btn--outline ds-btn--sm" onclick="crmGo('crm-onboarding')">Go to onboarding</button>`)
-    :!rows.length?crmEmpty('No search results','Try another name, or change the status filter.',`<button class="ds-btn ds-btn--outline ds-btn--sm" onclick="Object.assign(S,{crmActQ:'',crmActF:'All'});paintBody()">Clear filters</button>`)
-    :`<div class="ds-table-wrap"><table class="ds-table ds-table--wide crm-table"><thead><tr><th>Campaign</th><th>Product</th><th>Start – end</th><th class="ds-num">Creators</th><th class="ds-num">Ready</th><th class="ds-num">Pending</th><th class="ds-num">Approved</th><th class="ds-num">Published</th><th>Activation</th><th class="ds-sticky-r">Action</th></tr></thead><tbody>${tr}</tbody></table></div>`;
-  return `<div class="ds-page">
-    <div class="crumb"><button class="link" onclick="crmGo('crm')">CRM</button> / <span>Campaign activation</span></div>
-    ${crmPageHead('Campaign activation','Campaigns created from CRM. Activate creators, manage deliverables, review content and publish.','')}
-    <div class="ds-toolbar ds-toolbar--wrap">${dsSearch('crmActQ','Search campaign or product',S.crmActQ||'')}${dsFilter('crmActF','Activation',[['All','All activation states'],['Not started','Not started'],['Ready to start','Ready to start'],['In progress','In progress'],['Complete','Complete']],f)}<span class="ds-spacer"></span><span class="ds-table-meta">${rows.length} of ${camps.length} campaigns</span></div>
-    ${body}</div>`;
-}
-/* ── Activation detail ── */
-function crmActDetailHTML(){
-  const camp=campOf(S.crmCampId); if(!camp) return crmNotFound('Campaign');
-  const recs=crmRecsOfCamp(camp.id), dels=crmDelOf(camp.id), tab=S.crmActTab||'overview', p=planOf(camp.crm&&camp.crm.planId)||{};
-  const committed=recs.reduce((s,r)=>s+(r.agreed||0),0), ready=recs.filter(r=>crmReady(r)||r.onb.activated).length;
-  const approved=dels.filter(d=>DEL_LIVE.includes(d.status)).length, published=dels.filter(d=>d.status==='Published').length, live=dels.filter(d=>d.status!=='Cancelled').length;
-  const tabs=dsTabsFor('crmActTab',[['overview','Overview'],['creators',`Creators (${recs.length})`],['deliverables',`Deliverables (${dels.length})`],['review',`Content review (${dels.filter(d=>['Submitted','In Review','Changes Requested'].includes(d.status)).length})`],['publishing','Publishing']],tab);
-  let main='';
-  if(tab==='overview') main=crmActOverview(camp,p,recs,dels,{committed,ready,approved,published,live});
-  else if(tab==='creators') main=crmActCreators(camp,recs,dels);
-  else if(tab==='deliverables') main=crmActDeliverables(camp,recs,dels);
-  else if(tab==='review') main=crmActReview(camp,p,dels);
-  else main=crmActPublishing(camp,dels);
-  const addable=CRM.recs.filter(r=>r.planId===camp.crm?.planId&&r.status==='Agreed'&&!r.campId&&!r.withdrawn);
-  return `<div class="ds-page crm-detail">
-    <div class="crumb"><button class="link" onclick="crmGo('crm')">CRM</button> / <button class="link" onclick="crmGo('crm-activation')">Campaign activation</button> / <span>${esc(camp.name)}</span></div>
-    <header class="cdh crm-dh"><div class="cdh-top">
-      <button class="ds-dh-back" aria-label="Back to Campaign activation" onclick="crmGo('crm-activation')">${dsBackSvg}</button>
-      ${dsMedia(camp.id)}
-      <div class="cdh-main"><div class="cdh-title"><h1>${esc(camp.name)}</h1>${crmPill(crmActStatus(camp))}<span class="cdh-chip">${esc(camp.status)}</span></div>
-        <div class="cdh-meta">${esc(camp.product||'')} · Created ${campDate(camp.created)} · ${recs.length} creator${recs.length===1?'':'s'}</div></div>
-      <div class="cdh-actions"><button class="ds-btn ds-btn--outline ds-btn--sm" onclick="openCampaign('${camp.id}')">View campaign</button>${addable.length?`<button class="ds-btn ds-btn--outline ds-btn--sm" onclick="crmAddPick('${camp.id}')">Add creators</button>`:''}<button class="ds-btn ds-btn--primary ds-btn--sm" onclick="crmDelNewOpen('${camp.id}')">${icon('plus','ico-sm')}New deliverable</button></div>
-    </div><div class="cdh-tabs">${tabs}</div></header>
-    ${main}</div>`;
-}
-function crmAddPick(campId){
-  const camp=campOf(campId); const addable=CRM.recs.filter(r=>r.planId===camp.crm?.planId&&r.status==='Agreed'&&!r.campId&&!r.withdrawn);
-  dlg('Add creators to campaign','Only agreed creators from the same shortlist can be added.',
-    addable.map(r=>`<label class="ds-check"><input type="checkbox" class="crm-add-pick" value="${r.id}" checked> ${esc(cNameOf(r.creatorId))} · ${rupees(r.agreed||0)}</label>`).join(''),
-    `<button class="ds-btn ds-btn--outline" onclick="closeLayer()">Cancel</button><button class="ds-btn ds-btn--primary" onclick="crmAddPickApply('${campId}')">Add selected</button>`);
-}
-function crmAddPickApply(campId){ const ids=[...document.querySelectorAll('.crm-add-pick:checked')].map(x=>x.value); if(!ids.length) return toast('Select at least one creator'); crmAddToCampaign(campId,ids); }
-function crmActOverview(camp,p,recs,dels,k){
-  const pct=(a,b)=>b?Math.round(a/b*100):0;
-  const upcoming=dels.filter(d=>d.status!=='Published'&&d.status!=='Cancelled').sort((a,b)=>a.due.localeCompare(b.due)).slice(0,5);
-  const tiles=[['Objective',planTxt(p.objective)],['Product',planTxt(camp.product)],['Total budget',rupees(camp.budget)],['Committed fees',rupees(k.committed)],['Creators',recs.length],['Onboarding ready',`${k.ready} / ${recs.length}`]];
-  return `<div class="crm-tiles">${tiles.map(([l,v])=>`<div class="crm-tile"><span>${l}</span><b>${v}</b></div>`).join('')}</div>
-    <div class="crm-split"><div class="crm-main">
-      <section class="crm-card"><div class="crm-card-h"><h3>Progress</h3></div>
-        <div class="crm-prog-row"><span>Deliverable progress</span><div class="crm-prog"><i style="width:${pct(k.approved,k.live)}%"></i></div><b>${k.approved} / ${k.live}</b></div>
-        <div class="crm-prog-row"><span>Publication progress</span><div class="crm-prog"><i style="width:${pct(k.published,k.live)}%"></i></div><b>${k.published} / ${k.live}</b></div></section>
-      <section class="crm-card"><div class="crm-card-h"><h3>Brief summary</h3></div><p class="ds-body">${esc(p.productNotes||p.brief||'No brief summary.')}</p></section>
-    </div><aside class="crm-ctx"><h4>Upcoming deadlines</h4>${upcoming.length?upcoming.map(d=>`<div class="crm-dl ${crmOverdueDel(d)?'is-od':''}"><b>${esc(cNameOf(d.creatorId))}</b><span>${d.id} · ${esc(d.format)} · due ${campDate(d.due)}${crmOverdueDel(d)?' · overdue':''}</span></div>`).join(''):'<span class="pl-rv-none">No open deadlines</span>'}</aside></div>`;
-}
-function crmActCreators(camp,recs,dels){
-  if(!recs.length) return crmEmpty('No creators in this campaign','Add agreed creators from the shortlist to the campaign.');
-  const rows=recs.map(r=>{ const c=crOf(r.creatorId)||{name:'Creator'}, d=dels.filter(x=>x.recId===r.id), latest=d.sort((a,b)=>a.due.localeCompare(b.due))[0], b=crmBlockers(r);
-    const next=r.onb.activated?(d.length?'Track deliverables':'Create deliverable'):(b.length?'Blocked: '+b[0].t:'Activate creator');
-    return `<tr><td>${crmNameCell(c,`crmOpenRec('${r.id}')`)}</td><td class="ds-num">${rupees(r.agreed||0)}</td><td>${crmPill(crmStage(r))}</td><td class="ds-num">${d.length}</td>
-      <td>${latest?crmPill(latest.status):'<span class="ds-table-meta">None</span>'}</td><td>${r.onb.activated?'<span class="crm-ok">Activated</span>':'<span class="ds-table-meta">Not activated</span>'}</td>
-      <td>${esc(next)}</td>
-      <td class="ds-sticky-r"><div class="crm-row-acts">${r.onb.activated?'':`<button class="ds-btn ds-btn--outline ds-btn--sm" onclick="crmActivate('${r.id}')">Activate</button>`}<button class="ds-btn ds-btn--ghost ds-btn--sm" onclick="crmOpenOnb('${r.id}')">Onboarding</button></div></td></tr>`; }).join('');
-  return `<div class="ds-table-wrap"><table class="ds-table ds-table--wide crm-table"><thead><tr><th>Creator</th><th class="ds-num">Agreed fee</th><th>Stage</th><th class="ds-num">Deliverables</th><th>Content status</th><th>Activation</th><th>Next action</th><th class="ds-sticky-r">Actions</th></tr></thead><tbody>${rows}</tbody></table></div>`;
-}
-function crmActivate(id){
-  const r=crmRec(id); if(!r) return;
-  if(!crmReady(r)) crmOverride(r,'Activated with open items: '+crmBlockers(r).map(b=>b.t).join(', '));
-  r.onb.activated=true; crmLog(r,'Creator activated','Participation live in campaign'); crmSave(); paintBody(); toast('Creator activated for the campaign');
-}
-function crmDelRows(dels,opts){
-  return dels.map(d=>{ const r=crmRecOfDel(d), c=crOf(d.creatorId)||{name:'Creator'}, od=crmOverdueDel(d);
-    return `<tr class="${od?'is-od':''}"><td><span class="crm-id">${d.id}</span></td><td>${esc(c.name)}</td><td>${esc(d.platform)}</td><td>${esc(d.format)}</td><td class="crm-desc">${esc(d.desc)}</td>
-      <td>${campDate(d.due)}${od?' <span class="crm-od">Overdue</span>':''}</td><td>${d.submitted?campDate(d.submitted):'<span class="ds-table-meta">—</span>'}</td><td>${crmPill(d.status)}${d.version?` <span class="ds-table-meta">v${d.version}</span>`:''}</td>
-      <td>${d.publishDate?campDate(d.publishDate):'<span class="ds-table-meta">—</span>'}</td><td>${d.url?`<a class="crm-link" href="${esc(d.url)}" target="_blank" rel="noopener">Open post</a>`:'<span class="ds-table-meta">—</span>'}</td>
-      <td class="ds-sticky-r">${crmDelMenu(d)}</td></tr>`; }).join('');
-}
-function crmDelMenu(d){
-  const it=[];
-  if(['Not Started'].includes(d.status)) it.push(['Start production',`crmDelStart('${d.id}')`]);
-  if(['In Production','Changes Requested'].includes(d.status)) it.push([d.status==='Changes Requested'?'Resubmit content':'Submit content',`crmDelSubmit('${d.id}')`]);
-  if(['Submitted','In Review'].includes(d.status)) it.push(['Open review',`crmActTabTo('review')`]);
-  if(['Approved'].includes(d.status)) it.push(['Schedule',`crmDelSchedule('${d.id}')`]);
-  if(['Scheduled'].includes(d.status)) it.push(['Update schedule',`crmDelSchedule('${d.id}')`]);
-  if(['Approved','Scheduled'].includes(d.status)) it.push(['Mark published',`crmDelPublish('${d.id}')`]);
-  if(!['Published','Cancelled'].includes(d.status)) it.push(['Edit',`crmDelEdit('${d.id}')`],['Reschedule',`crmDelReschedule('${d.id}')`],['Cancel deliverable',`crmDelCancel('${d.id}')`,true]);
-  it.push(['Set status',`crmDelJumpOpen('${d.id}')`]);
-  return crmMenu('More actions for '+d.id,it);
-}
-function crmActTabTo(t){ S.crmActTab=t; paintBody(); }
-function crmActDeliverables(camp,recs,dels){
-  if(!dels.length) return crmEmpty('No deliverables yet','Deliverables are created from each creator’s agreed posts when the campaign is created, or add one now.',`<button class="ds-btn ds-btn--primary ds-btn--sm" onclick="crmDelNewOpen('${camp.id}')">New deliverable</button>`);
-  return `<div class="ds-table-wrap"><table class="ds-table ds-table--wide crm-table"><thead><tr><th>ID</th><th>Creator</th><th>Platform</th><th>Format</th><th>Content</th><th>Due</th><th>Submitted</th><th>Status</th><th>Publishing</th><th>Live URL</th><th class="ds-sticky-r">Actions</th></tr></thead><tbody>${crmDelRows(dels)}</tbody></table></div>
-    <p class="ds-caption">Overdue rows are highlighted. A deliverable is overdue when its due date has passed and it is not yet published.</p>`;
-}
-function crmDelNewOpen(campId){
-  const camp=campOf(campId), recs=crmRecsOfCamp(campId);
-  const opts=recs.map(r=>`<option value="${r.id}">${esc(cNameOf(r.creatorId))}</option>`).join('');
-  dlg('New deliverable','Creates a deliverable for a participating creator.',
-    `<label class="ds-field"><span>Creator</span><select id="crmNDr">${opts}</select></label>
-     <label class="ds-field"><span>Platform</span><select id="crmNDp">${['Instagram','YouTube','TikTok'].map(x=>`<option>${x}</option>`).join('')}</select></label>
-     <label class="ds-field"><span>Format</span><select id="crmNDf">${['Reel','Post','Carousel','Story'].map(x=>`<option>${x}</option>`).join('')}</select></label>
-     <label class="ds-field"><span>Content description</span><input id="crmNDd" placeholder="e.g. Unboxing Reel with the festive set"></label>
-     <label class="ds-field"><span>Due date</span><input id="crmNDu" type="date" value="${crmDue(14)}"></label>`,
-    `<button class="ds-btn ds-btn--outline" onclick="closeLayer()">Cancel</button><button class="ds-btn ds-btn--primary" onclick="crmDelCreate('${campId}')">Create deliverable</button>`);
-}
-function crmDelCreate(campId){
-  const rid=dlgVal('crmNDr'), desc=dlgVal('crmNDd'), due=dlgVal('crmNDu');
-  if(!desc) return toast('Describe the content'); if(!due) return toast('Set a due date');
-  const r=crmRec(rid), camp=campOf(campId);
-  CRM.dels.push({id:crmUid('DL-'),recId:rid,campId,creatorId:r.creatorId,platform:dlgVal('crmNDp'),format:dlgVal('crmNDf'),desc,due,status:'Not Started',submitted:null,publishDate:'',url:'',version:0,checks:[],comments:[],revisions:[],history:[]});
-  crmLog(r,'Deliverable created',desc); crmSave(); closeLayer(); paintBody(); toast('Deliverable created');
-}
-function crmDelEdit(id){
-  const d=crmDel(id);
-  dlg('Edit deliverable',d.id,`<label class="ds-field"><span>Content description</span><input id="crmED" value="${esc(d.desc)}"></label><label class="ds-field"><span>Platform</span><select id="crmEP">${['Instagram','YouTube','TikTok'].map(x=>`<option ${x===d.platform?'selected':''}>${x}</option>`).join('')}</select></label><label class="ds-field"><span>Format</span><select id="crmEF">${['Reel','Post','Carousel','Story'].map(x=>`<option ${x===d.format?'selected':''}>${x}</option>`).join('')}</select></label>`,
-    `<button class="ds-btn ds-btn--outline" onclick="closeLayer()">Cancel</button><button class="ds-btn ds-btn--primary" onclick="crmDelSave('${id}')">Save</button>`);
-}
-function crmDelSave(id){ const d=crmDel(id), desc=dlgVal('crmED'); if(!desc) return toast('Describe the content'); const changed=[]; if(desc!==d.desc) changed.push('content'); if(dlgVal('crmEP')!==d.platform||dlgVal('crmEF')!==d.format) changed.push('platform/format'); d.desc=desc; d.platform=dlgVal('crmEP'); d.format=dlgVal('crmEF'); if(changed.length) d.history.unshift({at:crmNow(),from:'',to:'',note:'Edited: '+changed.join(', ')}); crmSave(); closeLayer(); paintBody(); toast('Deliverable updated'); }
-function crmDelReschedule(id){
-  const d=crmDel(id);
-  dlg('Reschedule deliverable',d.id,`<label class="ds-field"><span>New due date</span><input id="crmRD2" type="date" value="${d.due}" min="${TODAY}"></label>`,
-    `<button class="ds-btn ds-btn--outline" onclick="closeLayer()">Cancel</button><button class="ds-btn ds-btn--primary" onclick="crmDelRescheduleApply('${id}')">Reschedule</button>`);
-}
-function crmDelRescheduleApply(id){ const d=crmDel(id), v=dlgVal('crmRD2'); if(!v||v<TODAY) return toast('Pick a date from today'); const from=d.due; d.due=v; d.history.unshift({at:crmNow(),from:campDate(from),to:campDate(v),note:'Rescheduled'}); crmLog(crmRecOfDel(d),'Deliverable rescheduled',d.id,campDate(from),campDate(v)); crmSave(); closeLayer(); paintBody(); toast('Deliverable rescheduled'); }
-function crmDelCancel(id){ dlg('Cancel deliverable','This removes the deliverable from the production list. Published posts are not affected.','',`<button class="ds-btn ds-btn--outline" onclick="closeLayer()">Keep it</button><button class="ds-btn ds-btn--danger" onclick="crmDelCancelApply('${id}')">Cancel deliverable</button>`); }
-function crmDelCancelApply(id){ const d=crmDel(id); crmDelLog(d,'Cancelled','Cancelled by manager'); crmLog(crmRecOfDel(d),'Deliverable cancelled',d.id); crmSave(); closeLayer(); paintBody(); toast('Deliverable cancelled'); }
-function crmDelStart(id){
-  const d=crmDel(id), r=crmRecOfDel(d);
-  if(!r.onb.activated) crmOverride(r,'Production started before activation');
-  crmDelLog(d,'In Production','Production started'); crmSave(); paintBody(); toast('Production started');
-}
-function crmDelSubmit(id){
-  const d=crmDel(id), r=crmRecOfDel(d);
-  if(!r.onb.activated) crmOverride(r,'Content submitted before activation');
-  const isResub=d.status==='Changes Requested';
-  dlg(isResub?'Resubmit content':'Submit content',`${d.id} · ${esc(d.format)} for ${esc(cNameOf(d.creatorId))}. Upload is simulated.`,
-    `<label class="ds-field"><span>File</span><input id="crmSF" value="${esc(cNameOf(d.creatorId).split(' ')[0].toLowerCase())}_${d.format.toLowerCase()}_v${d.version+1}.mp4"></label>
-     <label class="ds-field"><span>Caption</span><textarea id="crmSC" rows="3" placeholder="Caption the creator submitted"></textarea></label>`,
-    `<button class="ds-btn ds-btn--outline" onclick="closeLayer()">Cancel</button><button class="ds-btn ds-btn--primary" onclick="crmDelSubmitApply('${id}')">${isResub?'Resubmit':'Submit'}</button>`);
-}
-function crmDelSubmitApply(id){
-  const d=crmDel(id), file=dlgVal('crmSF'), cap=dlgVal('crmSC');
-  if(!file) return toast('Add a file name');
-  d.version+=1; d.submitted=TODAY; d.file=file; d.caption=cap||d.caption||''; d.checks=[];
-  crmDelLog(d,'Submitted',`v${d.version}: ${file}`); crmLog(crmRecOfDel(d),'Content submitted',`${d.id} v${d.version}`);
-  crmSave(); closeLayer(); paintBody(); toast(`Submitted v${d.version}. Open Content review to check it.`);
-}
-function crmActReview(camp,p,dels){
-  const q=dels.filter(d=>['Submitted','In Review','Changes Requested'].includes(d.status));
-  if(!q.length) return crmEmpty('Nothing to review','Submitted content appears here. Ask creators to submit from their deliverable.');
-  const reqs=crmReqs(p);
-  return `<div class="crm-review">${q.map(d=>{ const c=crOf(d.creatorId)||{name:'Creator'}; const checks=d.checks||[];
-    const items=reqs.length?reqs:['Brief followed'];
-    return `<section class="crm-card crm-rev"><div class="crm-card-h"><h3>${esc(c.name)} · ${d.id}</h3>${crmPill(d.status)}</div>
-      <div class="crm-rev-grid"><div class="crm-preview"><div class="crm-thumb">${esc(d.format)} · v${d.version}</div><b>${esc(d.file||'No file')}</b><p>${esc(d.caption||'No caption')}</p><span class="ds-table-meta">Submitted ${campDate(d.submitted)} · due ${campDate(d.due)}</span></div>
-      <div><h4 class="crm-sub">Brief requirements</h4>${items.map((t,i)=>`<label class="ds-check"><input type="checkbox" ${checks[i]?'checked':''} onchange="crmDelCheck('${d.id}',${i},this.checked)"> ${esc(t)}</label>`).join('')}
-      <h4 class="crm-sub">Comments</h4>${(d.comments||[]).length?d.comments.map(x=>`<div class="crm-cmt"><span>${esc(x.at)}</span>${esc(x.text)}</div>`).join(''):'<span class="pl-rv-none">No comments</span>'}
-      <div class="crm-taskform"><input id="crmCmt_${d.id}" class="nl-input crm-in" placeholder="Add a review comment"><button class="ds-btn ds-btn--outline ds-btn--sm" onclick="crmDelComment('${d.id}')">Add comment</button></div></div></div>
-      <div class="crm-actbar"><button class="ds-btn ds-btn--outline ds-btn--sm" onclick="crmDelReviewStart('${d.id}')" ${d.status==='Submitted'?'':'disabled'}>Start review</button><button class="ds-btn ds-btn--outline ds-btn--sm" onclick="crmDelRequestChanges('${d.id}')" ${d.status==='Changes Requested'?'disabled':''}>Request changes</button><button class="ds-btn ds-btn--primary ds-btn--sm" onclick="crmDelApprove('${d.id}')" ${d.status==='Changes Requested'?'disabled':''}>Approve</button>
-        ${(d.revisions||[]).length?`<details class="crm-hist"><summary>Revision history (${d.revisions.length})</summary>${d.revisions.map(x=>`<div>v${x.v} · ${esc(x.at)} · ${esc(x.note)}</div>`).join('')}</details>`:''}</div>
-      ${d.status==='Changes Requested'?'<div class="ds-note ds-note--warn">Changes requested. Approval is blocked until the creator resubmits.</div>':''}
-    </section>`; }).join('')}</div>`;
-}
-function crmDelCheck(id,i,on){ const d=crmDel(id); const a=[...(d.checks||[])]; a[i]=on; d.checks=a; crmSave(); }
-function crmDelComment(id){ const d=crmDel(id), el=document.getElementById('crmCmt_'+id), t=(el&&el.value||'').trim(); if(!t) return toast('Write a comment'); d.comments=[...(d.comments||[]),{at:crmNow(),text:t}]; crmSave(); paintBody(); toast('Comment added'); }
-function crmDelReviewStart(id){ const d=crmDel(id); crmDelLog(d,'In Review','Review started'); crmSave(); paintBody(); }
-function crmDelRequestChanges(id){
-  dlg('Request changes','The creator is told what to change. Approval stays blocked until they resubmit.',`<label class="ds-field"><span>What needs to change</span><textarea id="crmRCn" rows="3" placeholder="e.g. Show the product in the first 3 seconds"></textarea></label>`,
-    `<button class="ds-btn ds-btn--outline" onclick="closeLayer()">Cancel</button><button class="ds-btn ds-btn--primary" onclick="crmDelRequestChangesApply('${id}')">Request changes</button>`);
-}
-function crmDelRequestChangesApply(id){
-  const d=crmDel(id), note=dlgVal('crmRCn'); if(!note) return toast('Describe the change');
-  d.revisions=[...(d.revisions||[]),{v:d.version,at:crmNow(),note}]; d.comments=[...(d.comments||[]),{at:crmNow(),text:'Change requested: '+note}];
-  crmDelLog(d,'Changes Requested',note); crmLog(crmRecOfDel(d),'Changes requested',d.id+': '+note); crmSave(); closeLayer(); paintBody(); toast('Changes requested');
-}
-function crmDelApprove(id){
-  const d=crmDel(id), reqs=crmReqs(crmCampPlan(d)); const n=reqs.length||1, checks=d.checks||[];
-  if(!['Submitted','In Review'].includes(d.status)) crmOverride(crmRecOfDel(d),`${d.id} approved while ${d.status}`);
-  if(Array.from({length:n},(_,i)=>checks[i]).some(x=>!x)) crmOverride(crmRecOfDel(d),`${d.id} approved with brief requirements unticked`);
-  crmDelLog(d,'Approved',`v${d.version} approved`); crmLog(crmRecOfDel(d),'Content approved',`${d.id} v${d.version}`); crmSave(); paintBody(); toast('Content approved. You can schedule it now.');
-}
-function crmCampPlan(d){ const c=campOf(d.campId); return planOf(c&&c.crm?c.crm.planId:null)||{}; }
-function crmDelSchedule(id){
-  const d=crmDel(id);
-  dlg(d.status==='Scheduled'?'Update schedule':'Schedule publishing',`${d.id} · ${esc(cNameOf(d.creatorId))}`,`<label class="ds-field"><span>Publishing date</span><input id="crmSD" type="date" value="${d.publishDate||d.due}" min="${TODAY}"></label>`,
-    `<button class="ds-btn ds-btn--outline" onclick="closeLayer()">Cancel</button><button class="ds-btn ds-btn--primary" onclick="crmDelScheduleApply('${id}')">Save date</button>`);
-}
-function crmDelScheduleApply(id){
-  const d=crmDel(id), v=dlgVal('crmSD'); if(!v||v<TODAY) return toast('Pick a date from today');
-  const from=d.publishDate; d.publishDate=v; if(d.status!=='Scheduled') crmDelLog(d,'Scheduled',`Publish on ${campDate(v)}`); else d.history.unshift({at:crmNow(),from:campDate(from),to:campDate(v),note:'Schedule updated'});
-  crmSave(); closeLayer(); paintBody(); toast(`Scheduled for ${campDate(v)}`);
-}
-function crmDelPublish(id){
-  const d=crmDel(id);
-  dlg('Mark published','Add the live post link. The post appears in campaign tracking.',`<label class="ds-field"><span>Live post URL</span><input id="crmPU" placeholder="https://www.instagram.com/p/..."></label>`,
-    `<button class="ds-btn ds-btn--outline" onclick="closeLayer()">Cancel</button><button class="ds-btn ds-btn--primary" onclick="crmDelPublishApply('${id}')">Mark published</button>`);
-}
-function crmDelPublishApply(id){
-  const d=crmDel(id), url=dlgVal('crmPU');
-  if(!/^https?:\/\/\S+$/i.test(url)) return toast('Enter a full link starting with https://');
-  d.url=url; d.publishedAt=crmNow(); d.publishDate=d.publishDate||TODAY;
-  crmDelLog(d,'Published',url);
-  const camp=campOf(d.campId);
-  if(camp){ camp.posts=camp.posts||[]; if(!camp.posts.some(p=>p.id==='crm-'+d.id)) camp.posts.push({id:'crm-'+d.id,creator:d.creatorId,product:camp.product,date:d.publishDate,views:0,organic:0,paid:0,cost:0,concept:'',format:d.format,url,crmSource:true,mock:false}); }
-  const r=crmRecOfDel(d); if(r) crmLog(r,'Content published',`${d.id} · ${url}`);
-  crmSave(); closeLayer(); paintBody(); toast('Published. Added to campaign tracking.');
-}
-function crmActPublishing(camp,dels){
-  const approved=dels.filter(d=>d.status==='Approved'), sched=dels.filter(d=>d.status==='Scheduled'), pub=dels.filter(d=>d.status==='Published'), od=dels.filter(d=>crmOverdueDel(d));
-  const list=(arr,btns)=>arr.length?`<div class="ds-table-wrap"><table class="ds-table crm-table-sm"><thead><tr><th>ID</th><th>Creator</th><th>Format</th><th>Date</th><th>Live URL</th><th class="ds-sticky-r">Actions</th></tr></thead><tbody>${arr.map(d=>`<tr><td><span class="crm-id">${d.id}</span></td><td>${esc(cNameOf(d.creatorId))}</td><td>${esc(d.format)}</td><td>${d.publishDate?campDate(d.publishDate):'<span class="ds-table-meta">Not scheduled</span>'}</td><td>${d.url?`<a class="crm-link" href="${esc(d.url)}" target="_blank" rel="noopener">Open post</a>`:'—'}</td><td class="ds-sticky-r"><div class="crm-row-acts">${btns(d)}</div></td></tr>`).join('')}</tbody></table></div>`:'<span class="pl-rv-none">None</span>';
-  return `<section class="crm-card"><div class="crm-card-h"><h3>Approved, awaiting scheduling</h3></div>${list(approved,d=>`<button class="ds-btn ds-btn--primary ds-btn--sm" onclick="crmDelSchedule('${d.id}')">Set publishing date</button>`)}</section>
-    <section class="crm-card"><div class="crm-card-h"><h3>Scheduled</h3></div>${list(sched,d=>`<button class="ds-btn ds-btn--outline ds-btn--sm" onclick="crmDelSchedule('${d.id}')">Update schedule</button><button class="ds-btn ds-btn--primary ds-btn--sm" onclick="crmDelPublish('${d.id}')">Mark published</button>`)}</section>
-    <section class="crm-card"><div class="crm-card-h"><h3>Published</h3></div>${list(pub,d=>`<button class="ds-btn ds-btn--outline ds-btn--sm" onclick="openCampaign('${camp.id}')">Open in tracking</button>`)}</section>
-    <section class="crm-card"><div class="crm-card-h"><h3>Overdue or unpublished</h3></div>${list(od,d=>`<button class="ds-btn ds-btn--outline ds-btn--sm" onclick="crmDelReschedule('${d.id}')">Reschedule</button>`)}</section>
-    <p class="ds-caption">Tracked posts show 0 views until performance data is connected. Nothing here is a measured result.</p>`;
-}
-
-/* ── Deliverable: any status, any order ── */
-function crmDelJumpOpen(id){
-  const d=crmDel(id); if(!d) return;
-  dlg('Set deliverable status',`${d.id} · ${esc(d.desc||d.format)}. The change and your note are saved to its history.`,
-    `<label class="ds-field"><span>Status</span><select id="crmDJTo">${CRM_DEL.map(x=>`<option ${x===d.status?'selected':''}>${x}</option>`).join('')}</select></label>
-     <label class="ds-field"><span>Note (optional)</span><input id="crmDJNote" placeholder="Why the status changed"></label>`,
-    `<button class="ds-btn ds-btn--outline" onclick="closeLayer()">Cancel</button><button class="ds-btn ds-btn--primary" onclick="crmDelJumpApply('${id}')">Save status</button>`);
-}
-function crmDelJumpApply(id){
-  const d=crmDel(id), to=dlgVal('crmDJTo'), note=(dlgVal('crmDJNote')||'').trim();
-  if(!d||!to) return; if(to===d.status){ closeLayer(); return toast('Status unchanged'); }
-  crmDelLog(d,to,note||'Status set manually'); crmSave(); closeLayer(); paintBody(); toast(`Deliverable set to ${to}`);
-}
-
-/* ════════ CRM · overview (operational, derived from CRM records) ════════ */
-function crmActions(){
-  const rows=[];
-  const prio=(due)=>!due?'Low':due<TODAY?'High':(crmDue(2)>=due?'Medium':'Low');
-  CRM.recs.forEach(r=>{
-    const c=crOf(r.creatorId)||{name:'Creator'}, p=planOf(r.planId)||{name:'—'}, base={rec:r.id,creator:c.name,list:p.name,stage:crmStage(r)||'Declined',owner:r.owner};
-    r.tasks.filter(t=>t.status==='Open').forEach(t=>rows.push({...base,action:t.title||'Follow up with creator',due:t.due,go:`crmOpenRec('${r.id}')`,tab:'tasks'}));
-    const open=crmOpenOffer(r);
-    if(r.status==='Negotiating'&&open&&open.by==='Creator') rows.push({...base,action:'Review counteroffer',due:TODAY,go:`crmOpenRec('${r.id}')`});
-    if(r.approval&&r.approval.status==='Pending') rows.push({...base,action:'Approve negotiated fee',due:TODAY,go:`crmOpenRec('${r.id}')`});
-    if(r.status==='Agreed'&&!r.campId){
-      if(r.onb.contract==='Not Created'||r.onb.contract==='Prepared') rows.push({...base,action:'Send contract',due:crmDue(3),go:`crmOpenOnb('${r.id}')`});
-      if(r.onb.contract==='Revision Requested') rows.push({...base,action:'Prepare revised contract',due:crmDue(2),go:`crmOpenOnb('${r.id}')`});
-      if(r.onb.seed.status==='Dispatched'||r.onb.seed.status==='In Transit') rows.push({...base,action:'Confirm product delivery',due:crmDue(2),go:`crmOpenOnb('${r.id}')`});
-      if(r.onb.seed.status==='Issue') rows.push({...base,action:'Resolve product delivery issue',due:TODAY,go:`crmOpenOnb('${r.id}')`});
-      if(!r.onb.briefAck&&r.onb.started) rows.push({...base,action:'Record brief acknowledgement',due:crmDue(3),go:`crmOpenOnb('${r.id}')`});
-    }
-  });
-  CRM.dels.forEach(d=>{
-    const r=crmRec(d.recId); if(!r) return; const c=crOf(d.creatorId)||{name:'Creator'}; const camp=campOf(d.campId)||{name:'Campaign'};
-    const base={rec:r.id,creator:c.name,list:camp.name,stage:'Active',owner:r.owner};
-    if(d.status==='Submitted'||d.status==='In Review') rows.push({...base,action:`Review submitted ${d.format}`,due:d.due,go:`crmOpenAct('${camp.id}')`,tab:'review'});
-    if(d.status==='Approved') rows.push({...base,action:'Schedule approved content',due:d.due,go:`crmOpenAct('${camp.id}')`});
-  });
-  return rows.map(x=>({...x,priority:prio(x.due)})).sort((a,b)=>({High:0,Medium:1,Low:2})[a.priority]-({High:0,Medium:1,Low:2})[b.priority]||(a.due||'').localeCompare(b.due||''));
-}
-function crmOverviewHTML(){
-  crmBoot();
-  const recs=CRM.recs, stage=s=>recs.filter(r=>crmStage(r)===s).length;
-  const awaitingOut=CRM_PLANS_SL().filter(x=>!crmRecFor(x.planId,x.creatorId)).length+recs.filter(r=>r.status==='Not Contacted').length;
-  const counts={Shortlisted:awaitingOut,Contacted:stage('Contacted'),Negotiating:stage('Negotiating'),Agreed:stage('Agreed'),Onboarding:stage('Onboarding'),Ready:stage('Ready'),Active:stage('Active')};
-  const openTasks=recs.flatMap(r=>r.tasks.filter(t=>t.status==='Open')), overdueTasks=openTasks.filter(crmOverdueTask).length;
-  const liveDels=CRM.dels.filter(d=>!['Published','Cancelled'].includes(d.status)).length;
-  const metrics=[
-    ['Active shortlist lists',CAMP_PLANS.filter(p=>p.shortlisted.length||crmRecsOf(p.id).length).length,'Lists with shortlisted or contacted creators','crm-shortlists'],
-    ['Creators awaiting outreach',awaitingOut,'Shortlisted, not yet contacted','crm-outreach|Not Contacted'],
-    ['Creators awaiting responses',recs.filter(r=>r.status==='Contacted'||r.status==='Awaiting Response').length,'Invitations sent, no reply yet','crm-outreach|Awaiting Response'],
-    ['Negotiations in progress',recs.filter(r=>r.status==='Negotiating').length,'Open offers and counteroffers','crm-outreach|Negotiating'],
-    ['Creators awaiting onboarding',counts.Agreed+counts.Onboarding,'Agreed, onboarding not complete','crm-onboarding'],
-    ['Creators ready for activation',counts.Ready,'Onboarding complete','crm-onboarding'],
-    ['Active deliverables',liveDels,'Not yet published or cancelled','crm-activation'],
-    ['Overdue tasks',overdueTasks,'Follow-ups past their due date','crm-outreach']
-  ];
-  const acts=crmActions();
-  const pipeHTML=crmKanbanHTML();
-  const metricHTML=metrics.map(([l,v,s,go])=>`<button type="button" class="crm-metric" onclick="crmJump('${go}')"><span>${l}</span><b>${v}</b><small>${s}</small></button>`).join('');
-  const actHTML=acts.length?`<div class="ds-table-wrap"><table class="ds-table ds-table--wide crm-table"><thead><tr><th>Creator</th><th>Shortlist / campaign</th><th>Current stage</th><th>Required action</th><th>Owner</th><th>Due</th><th>Priority</th><th class="ds-sticky-r">Action</th></tr></thead><tbody>${acts.map((a,i)=>`<tr class="crm-clickrow" onclick="${a.go}"><td><b>${esc(a.creator)}</b></td><td>${esc(a.list)}</td><td>${crmPill(a.stage)}</td><td>${esc(a.action)}</td><td>${esc(a.owner)}</td><td>${a.due?(a.due<TODAY?`<span class="crm-od">${campDate(a.due)} · overdue</span>`:campDate(a.due)):'—'}</td><td><span class="crm-prio crm-prio--${a.priority.toLowerCase()}">${a.priority}</span></td><td class="ds-sticky-r"><button class="ds-btn ds-btn--outline ds-btn--sm" onclick="event.stopPropagation();${a.go}">Open</button></td></tr>`).join('')}</tbody></table></div>`
-    :crmEmpty('Nothing needs action','Follow-ups, approvals, contracts and content reviews appear here when they need you.',`<button class="ds-btn ds-btn--outline ds-btn--sm" onclick="crmGo('crm-shortlists')">Go to shortlists</button>`);
-  return `<div class="ds-page crm-ov">
-    <div class="crumb"><span>CRM</span></div>
-    ${crmPageHead('CRM overview','What needs attention today, and where each creator sits in the collaboration.','')}
-    <div class="crm-metrics">${metricHTML}</div>
-    <section class="crm-card"><div class="crm-card-h"><h3>Pipeline</h3><span class="ds-table-meta">One card per creator participation record</span></div>${pipeHTML}</section>
-    <section class="crm-card"><div class="crm-card-h"><h3>Action required</h3><span class="ds-table-meta">${acts.length} item${acts.length===1?'':'s'}</span></div>${actHTML}</section>
-  </div>`;
-}
-function crmKanbanHTML(){
-  const cols=['Shortlisted','Contacted','Negotiating','Agreed','Onboarding','Ready','Active'];
-  const by={}; cols.forEach(c=>by[c]=[]);
-  CRM_PLANS_SL().filter(x=>!crmRecFor(x.planId,x.creatorId)).forEach(x=>{
-    const c=crOf(x.creatorId)||{name:'Creator'}, p=planOf(x.planId)||{name:'—'};
-    by.Shortlisted.push({name:c.name,plan:p.name,owner:'',open:0,go:"crmGo('crm-shortlists')"});
-  });
-  CRM.recs.forEach(r=>{
-    const st=crmStage(r); if(!st||!by[st]) return;
-    const c=crOf(r.creatorId)||{name:'Creator'}, p=planOf(r.planId)||{name:'—'};
-    by[st].push({name:c.name,plan:p.name,owner:r.owner,open:r.tasks.filter(t=>t.status==='Open').length,go:`crmOpenRec('${r.id}')`});
-  });
-  const cells=cols.map(c=>`<div class="crm-kb-col"><div class="crm-kb-h"><span>${c}</span><b>${by[c].length}</b></div><div class="crm-kb-list">${by[c].map(k=>`<button type="button" class="crm-kb-card" onclick="${k.go}"><b>${esc(k.name)}</b><small>${esc(k.plan)}</small><div class="crm-kb-meta"><span>${esc(k.owner||'Unassigned')}</span>${k.open?`<em>${k.open} open</em>`:''}</div></button>`).join('')||'<p class="crm-kb-empty">None</p>'}</div></div>`).join('');
-  return `<div class="crm-kb">${cells}</div>`;
-}
-function CRM_PLANS_SL(){ const out=[]; CAMP_PLANS.forEach(p=>(p.shortlisted||[]).forEach(cid=>out.push({planId:p.id,creatorId:cid}))); return out; }
-function crmJump(go){
-  const [page,st]=go.split('|');
-  if(page==='crm-outreach'){ S.crmOutStatus=st||'All'; S.crmOutStage=null; }
-  if(page==='crm-outreach'&&st===undefined){ S.crmOutStatus='All'; }
-  crmGo(page);
-}
+const dateInDays=n=>{const d=new Date(TODAY+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10);};
 
 /* ════════ DATA (from Creator Intelligence prototype) ════════ */
 const BRANDS=[
@@ -1262,19 +121,6 @@ const TOPICS=['Food','Wellness','Parenting','Travel','Skincare','Lifestyle','Boo
 const APPROACHES=['Product showcase','Personal lifestyle','Editorial storytelling','Behind the scenes','Tutorial','Day in the life'];
 const TITLES=['The everyday reset','My 5-minute routine','A little weekend ritual','What actually works','The essentials I keep','An honest product test','Sunday slow morning','Three things I learned','Behind my daily routine','Making time for myself','My favorite little finds','A simpler way to do it'];
 const FORMATS=['Reel','Reel','Static','Carousel','Video','Short'];
-const PHOTOS=[
- 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=500&h=660&fit=crop',
- 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=500&h=660&fit=crop',
- 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=500&h=660&fit=crop',
- 'https://images.unsplash.com/photo-1529139574466-a303027c1d8b?w=500&h=660&fit=crop',
- 'https://images.unsplash.com/photo-1483985988355-763728e1935b?w=500&h=660&fit=crop',
- 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=500&h=660&fit=crop',
- 'https://images.unsplash.com/photo-1496747611176-843222e1e57c?w=500&h=660&fit=crop',
- 'https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?w=500&h=660&fit=crop',
- 'https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=500&h=660&fit=crop',
- 'https://images.unsplash.com/photo-1525507119028-ed4c629a60a3?w=500&h=660&fit=crop',
- 'https://images.unsplash.com/photo-1483985988355-763728e1935b?w=500&h=660&fit=crop'
-];
 const PASTEL=['#fbcfe8','#dbeafe','#bbf7d0','#fef3c7','#dbeafe','#fef3c7'];
 const pastelURI=c=>'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4 5"><rect width="4" height="5" fill="${c}"/></svg>`);
 const photo=p=>pastelURI(PASTEL[(p.id-1)%PASTEL.length]);
@@ -1296,12 +142,6 @@ const V3PERF={
  Meta:{count:'44 posts',updated:'Updated 5h ago',metrics:[['Typical video views','12.3K','Per video'],['Posts per week','1.3','Meta cadence'],['Branded posts','9%','4 of 44'],['Average reactions','960','Per post']],formats:[['Video',61],['Image',30],['Link',9]]},
  TikTok:{count:'62 posts',updated:'Updated 3h ago',metrics:[['Typical video views','32.4K','Per video'],['Posts per week','2.1','TikTok cadence'],['Branded posts','8%','5 of 62'],['Average likes','3.2K','Per video']],formats:[['Video',86],['Photo',10],['Other',4]]}
 };
-const PLAT={
- Instagram:{k:[['Posts','142'],['Views','2.91M'],['Avg. likes','4.5K'],['Engagement rate','3.2%'],['Avg. comments','114']],f:[['Reels',52],['Carousel',38],['Image',10]]},
- TikTok:{k:[['Posts','87'],['Views','1.64M'],['Avg. likes','6.1K'],['Engagement rate','4.6%'],['Avg. comments','182']],f:[['Video',89],['Photo',11]]},
- Meta:{k:[['Posts','64'],['Views','850K'],['Avg. reactions','2.1K'],['Engagement rate','2.4%'],['Avg. comments','72']],f:[['Video',48],['Photo',42],['Link',10]]}
-};
-const FMT_COLORS=['#22c55e','#3b82f6','#ef4444'];
 const DIMENSIONS=[
  {name:'Topics',color:'#2563eb',items:[['Skincare',28,32,148,820,4.8],['Wellness',22,25,112,640,4.2],['Daily routines',19,22,94,520,3.8],['Books & reading',11,13,59,290,3.5],['DIY',7,8,31,180,2.9]]},
  {name:'Angles',color:'#0284c7',items:[['Problem → Solution',26,30,152,850,5.1],['Personal experience',23,26,117,680,4.4],['Product comparison',15,17,83,420,3.7],['Expert advice',13,15,69,330,3.5],['Before & after',10,12,56,290,3.3]]},
@@ -1357,7 +197,6 @@ const COLLABS=[
 ];
 const OUR_COLOR='#ec4899';
 const SIG_COLORS={'Paid partnership':'#16a34a','Collaborator':'#7c3aed','Brand mention':'#3b82f6','Caption mention':'#3b82f6','Brand placement':'#f59e0b'};
-const MARKS={'Mamaearth':'m','Minimalist':'m.','Adidas':'▲','Sephora':'S','The Derma Co':'D','Plum':'p'};
 const CAMPAIGNS=['Diwali Gifting 2026','Winter Denim Drop','Wellness Creators Q4','Summer Lifestyle Launch'];
 const CANDIDATES=['Alex Rivera','Taylor Woods','Morgan Lee','Sam Patel','Avery Brooks'];
 const ANSWERS=[
@@ -1366,11 +205,6 @@ const ANSWERS=[
  ['Is the audience right for Mamaearth?','Nicole’s audience skews female, which supports relevance, but the United States leads her audience geography while the Mamaearth campaign targets India. Review audience fit before committing.'],
  ['What formats work best?','Reels are the strongest example format in this demo, with 126.1K typical views and +54% uplift versus the illustrative baseline.']
 ];
-const SNAP={Views:[12,18,25,24,37,42,47,59,63,70,78,91],Engagement:[18,22,19,31,37,32,45,50,47,62,67,76],Likes:[10,16,19,25,31,29,40,46,54,58,69,77],'Overall growth':[8,12,19,23,28,35,40,48,57,66,74,85]};
-const SNAP_COLORS={Views:'#3b82f6',Engagement:'#0369a1',Likes:'#fbbf24','Overall growth':'#ec4899'};
-const SNAP_KPI=[['Views','96.4K','+12.8%'],['Engagement','7.74%','+0.6 pp'],['Likes','4.5K','+9.2%'],['Overall growth','+6.8%','+1.4 pp']];
-const SNAP_LABELS={'3m':['Aug','Sep','Oct'],'6m':['May','Jun','Jul','Aug','Sep','Oct'],'1y':['Nov','Jan','Mar','May','Jul','Sep','Oct']};
-const SNAP_POINTS={'3m':7,'6m':10,'1y':12};
 
 /* ════════ HELPERS ════════ */
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -1581,10 +415,6 @@ function paintHeader(){
 function toggleSave(){ S.saved=!S.saved; S.menu=null; paintHeader(); toast(S.saved?'Creator saved':'Creator removed from saved'); }
 function filterCandidates(v){ const q=v.trim().toLowerCase(); document.querySelectorAll('[data-person]').forEach(e=>e.style.display=e.textContent.toLowerCase().includes(q)?'':'none'); }
 function pickCandidate(n){ S.menu=null; paintHeader(); toast(n+' selected for comparison · demo'); }
-function toggleCampaign(n){
-  S.campaigns=S.campaigns.includes(n)?S.campaigns.filter(x=>x!==n):[...S.campaigns,n];
-  S.menu=null; paintHeader(); paintBody(); toast(S.campaigns.includes(n)?'Added to '+n:'Removed from '+n);
-}
 function copyLink(){ navigator.clipboard?.writeText(location.href).catch(()=>{}); S.menu=null; paintHeader(); toast('Profile link copied'); }
 function refreshData(){ S.menu=null; paintHeader(); toast('Demo profile refresh completed'); }
 function exportProfile(){
@@ -1716,8 +546,6 @@ function pOverview(){
       </div>
     </section>
 
-
-    
   </div>
   <aside class="stack">
     <div class="rail-card">
@@ -1769,102 +597,6 @@ function setPerfTab(p){
   document.getElementById('perfMetrics').innerHTML=perfMetricsHTML();
   document.getElementById('perfFormat').innerHTML=perfFormatHTML();
 }
-/* Performance snapshot: one chart per metric, radio-selected */
-const SNAP_DEF={
-  Views:{color:'#3b82f6',start:{'3m':78,'6m':61,'1y':42},end:96.4,prevEnd:70.2,kpi:'96.4K',d:'+12.8%',fmt:v=>v.toFixed(1)+'K',tick:v=>Math.round(v)+'K'},
-  Engagement:{color:'#0369a1',start:{'3m':7.1,'6m':6.6,'1y':5.9},end:7.74,prevEnd:7.14,kpi:'7.74%',d:'+0.6 pp',fmt:v=>v.toFixed(2)+'%',tick:v=>v.toFixed(1)+'%'},
-  Likes:{color:'#fbbf24',start:{'3m':3.9,'6m':3.6,'1y':2.9},end:4.5,prevEnd:4.1,kpi:'4.5K',d:'+9.2%',fmt:v=>v.toFixed(2)+'K',tick:v=>v.toFixed(1)+'K'},
-  'Overall growth':{color:'#ec4899',start:{'3m':4.2,'6m':3.1,'1y':-1.4},end:6.8,prevEnd:5.4,kpi:'+6.8%',d:'+1.4 pp',fmt:v=>(v>0?'+':'')+v.toFixed(1)+'%',tick:v=>(v>0?'+':'')+Math.round(v)+'%'}
-};
-const SNAP_N={'3m':13,'6m':26,'1y':12};
-const SNAP_VIEW={metric:'Views',period:S.perfPeriod,hover:null,pin:null,cur:[],prev:[],labels:[],n:0,W:900,H:260,L:52,R:14,T:16,B:30,x:null,y:null};
-function snapSeries(metric,period){
-  const d=SNAP_DEF[metric], n=SNAP_N[period], s=d.start[period], e=d.end;
-  const ps=s-(e-s)*0.12, pe=d.prevEnd, amp=Math.abs(e-s)*0.05;
-  const cur=[], prev=[], labels=[], end=Date.UTC(2026,9,22);
-  for(let i=0;i<n;i++){
-    const t=i/(n-1), ease=1-Math.pow(1-t,1.6), mid=i>0&&i<n-1;
-    cur.push(i===n-1?e:s+(e-s)*ease+(mid?amp*Math.sin(i*1.7+s)*(1-t*0.5):0));
-    prev.push(i===n-1?pe:ps+(pe-ps)*t+(mid?amp*0.7*Math.sin(i*1.3+e):0));
-    labels.push(period==='1y'?new Date(Date.UTC(2026,9-(n-1-i),1)):new Date(end-(n-1-i)*7*864e5));
-  }
-  return {cur,prev,labels};
-}
-function snapFmtAxis(dt){ return dt.toLocaleDateString('en-GB',SNAP_VIEW.period==='1y'?{month:'short',timeZone:'UTC'}:{day:'numeric',month:'short',timeZone:'UTC'}); }
-function snapFmtTip(dt){ return dt.toLocaleDateString('en-GB',SNAP_VIEW.period==='1y'?{month:'long',year:'numeric',timeZone:'UTC'}:{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'}); }
-function smoothPath(p){
-  let d=`M${p[0][0].toFixed(1)},${p[0][1].toFixed(1)}`;
-  for(let i=0;i<p.length-1;i++){
-    const p0=p[i-1]||p[i], p1=p[i], p2=p[i+1], p3=p[i+2]||p2;
-    const c1x=p1[0]+(p2[0]-p0[0])/6, c1y=p1[1]+(p2[1]-p0[1])/6, c2x=p2[0]-(p3[0]-p1[0])/6, c2y=p2[1]-(p3[1]-p1[1])/6;
-    d+=` C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
-  }
-  return d;
-}
-function snapOptsHTML(){
-  return Object.keys(SNAP_DEF).map(k=>{
-    const d=SNAP_DEF[k], on=SNAP_VIEW.metric===k;
-    return `<label class="snap-opt ${on?'on':''}" style="--c:${d.color}"><input type="radio" name="snapMetric" value="${esc(k)}" ${on?'checked':''} onchange="setSnapMetric('${esc(k)}')"><span class="snap-k"><i></i>${k}</span><strong class="snap-v">${d.kpi}</strong><span class="snap-d">${d.d}</span></label>`;
-  }).join('');
-}
-function snapChartHTML(){
-  const V=SNAP_VIEW, d=SNAP_DEF[V.metric], {cur,prev,labels}=snapSeries(V.metric,V.period), n=cur.length;
-  const W=V.W,H=V.H,L=V.L,R=V.R,T=V.T,B=V.B;
-  const all=[...cur,...prev], mn=Math.min(...all), mx=Math.max(...all), pad=(mx-mn)*0.14||1;
-  const lo=mn-pad, hi=mx+pad;
-  const x=i=>L+i*(W-L-R)/(n-1), y=v=>T+(H-T-B)*(1-(v-lo)/(hi-lo));
-  Object.assign(V,{cur,prev,labels,n,x,y,lo,hi,hover:null,pin:null});
-  const grid=[0,1,2,3,4].map(k=>{const v=lo+(hi-lo)*k/4;return `<line x1="${L}" x2="${W-R}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}" stroke="#eff6ff"/><text x="${L-10}" y="${(y(v)+4).toFixed(1)}" text-anchor="end" font-size="11" fill="#94a3b8">${d.tick(v)}</text>`;}).join('');
-  const curPts=cur.map((v,i)=>[x(i),y(v)]), prevPts=prev.map((v,i)=>[x(i),y(v)]);
-  const curPath=smoothPath(curPts);
-  const area=`${curPath} L${x(n-1).toFixed(1)},${y(lo).toFixed(1)} L${x(0).toFixed(1)},${y(lo).toFixed(1)} Z`;
-  const step=Math.ceil(n/6);
-  const xl=labels.map((dt,i)=>i%step===0?`<text x="${x(i).toFixed(1)}" y="${H-8}" text-anchor="middle" font-size="11" fill="#94a3b8">${snapFmtAxis(dt)}</text>`:'').join('');
-  const svg=`<svg class="snap-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(V.metric)} over ${V.period}">
-    <defs><linearGradient id="snapG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${d.color}" stop-opacity=".26"/><stop offset="1" stop-color="${d.color}" stop-opacity="0"/></linearGradient></defs>
-    ${grid}
-    <path d="${area}" fill="url(#snapG)"/>
-    <path d="${smoothPath(prevPts)}" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 5"/>
-    <path d="${curPath}" fill="none" stroke="${d.color}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-    <g id="snapHL"></g>${xl}
-    <rect x="${L}" y="${T}" width="${W-L-R}" height="${H-T-B}" fill="transparent" style="cursor:crosshair" onmousemove="snapMove(event)" onmouseleave="snapLeave()" onclick="snapClick()"/>
-  </svg>`;
-  return `<div class="snap-legend"><span style="--c:${d.color}"><i></i>This period</span><span><i class="dash"></i>Previous period</span><span id="snapPin" class="snap-pin">Click a point to pin it</span></div>
-    <div class="snap-plot" id="snapPlot">${svg}<div class="snap-tip" id="snapTip" hidden></div></div>`;
-}
-function snapMove(e){
-  const V=SNAP_VIEW, bb=e.currentTarget.ownerSVGElement.getBoundingClientRect();
-  const px=(e.clientX-bb.left)/bb.width*V.W, f=(px-V.L)/(V.W-V.L-V.R);
-  const i=Math.max(0,Math.min(V.n-1,Math.round(f*(V.n-1))));
-  if(V.hover!==i){ V.hover=i; snapDraw(); }
-}
-function snapLeave(){ SNAP_VIEW.hover=null; snapDraw(); }
-function snapClick(){ const V=SNAP_VIEW; if(V.hover==null) return; V.pin=V.pin===V.hover?null:V.hover; snapDraw(); }
-function snapDraw(){
-  const V=SNAP_VIEW, g=document.getElementById('snapHL'), tip=document.getElementById('snapTip'), pinEl=document.getElementById('snapPin');
-  if(!g||!tip) return;
-  const d=SNAP_DEF[V.metric], active=V.hover!=null?V.hover:V.pin;
-  let out='';
-  if(V.pin!=null && V.pin!==active){ out+=`<circle cx="${V.x(V.pin).toFixed(1)}" cy="${V.y(V.cur[V.pin]).toFixed(1)}" r="4" fill="${d.color}"/>`; }
-  if(active!=null){
-    const x=V.x(active), y=V.y(V.cur[active]);
-    out+=`<line x1="${x.toFixed(1)}" x2="${x.toFixed(1)}" y1="${V.T}" y2="${V.H-V.B}" stroke="#94a3b8" stroke-dasharray="3 4"/><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="6" fill="#ffffff" stroke="${d.color}" stroke-width="2.5"/>`;
-    const plot=document.getElementById('snapPlot');
-    tip.hidden=false;
-    tip.innerHTML=`${d.fmt(V.cur[active])}<small>${snapFmtTip(V.labels[active])}</small>`;
-    tip.style.left=(x/V.W*plot.clientWidth)+'px';
-    tip.style.top=(y/V.H*plot.clientHeight)+'px';
-  } else tip.hidden=true;
-  g.innerHTML=out;
-  pinEl.textContent=V.pin!=null?`Pinned · ${snapFmtTip(V.labels[V.pin])} · ${d.fmt(V.cur[V.pin])}`:'Click a point to pin it';
-}
-function paintSnap(){
-  document.getElementById('snapOpts').innerHTML=snapOptsHTML();
-  document.getElementById('snapChart').innerHTML=snapChartHTML();
-  document.querySelectorAll('#snapCard .seg button').forEach(b=>{const on=b.textContent===SNAP_VIEW.period;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on);});
-}
-function setSnapMetric(k){ SNAP_VIEW.metric=k; paintSnap(); }
-function setSnapPeriod(p){ SNAP_VIEW.period=p; S.perfPeriod=p; paintSnap(); }
 function toggleRecentTopic(t){ S.recentTopic=S.recentTopic===t?'':t; paintBody(); }
 function recentPosts(){
   const k=({'Personal storytelling':'personal','Product demos':'product'})[S.recentTopic]||S.recentTopic.toLowerCase();
@@ -1905,7 +637,6 @@ function collectionOptions(){
 }
 function setCollection(n){ S.content.collection=n; document.querySelectorAll('#collections button').forEach(b=>{const on=b.textContent.startsWith(n+' ·');b.classList.toggle('on',on);b.setAttribute('aria-pressed',on);}); paintContentBody(); }
 function setContent(k,v){ S.content[k]=v; paintContentBody(); }
-function setView(v){ S.content.view=v; document.querySelectorAll('.view button').forEach(b=>{const on=b.getAttribute('aria-label')===v+' view';b.classList.toggle('on',on);b.setAttribute('aria-pressed',on);}); paintContentBody(); }
 function resetContent(){ S.content={...S.content,q:'',format:'All formats',platform:'All',collection:'All'}; paintBody(); }
 function filteredPosts(){
   const C=S.content, q=C.q.trim().toLowerCase();
@@ -2076,12 +807,10 @@ function perfOverviewHTML(){
     <div id="perfArea">${perfAreaHTML()}</div>
   </div>`;
 }
-function setPerfPlat(p){ S.perfPlat=p; paintBody(); }
 function setDim(i){ S.perfDim=i; S.perfSel=0; S.perfQ=''; S.perfAll=false; paintBody(); }
 function setPerfQ(v){ S.perfQ=v; S.perfSel=0; paintPerfArea(); }
 function toggleShowAll(){ S.perfAll=!S.perfAll; paintBody(); }
 function pickRow(id){ S.perfSel=id; paintPerfArea(); }
-function setPerfView(v){ S.perfView=v; paintPerfArea(); }
 function dotsHTML(rows,color,sel){
   const sorted=rows.slice().sort((a,b)=>(b.engagement-a.engagement)||(b.posts-a.posts)).slice(0,10);
   const avg=sorted.reduce((s,r)=>s+r.engagement,0)/Math.max(1,sorted.length);
@@ -2091,21 +820,6 @@ function dotsHTML(rows,color,sel){
     <div class="dots-axis"><span></span><span class="dots-scale">${[0,2,4,6,8].filter(v=>v<=max).map(v=>`<em style="left:${x(v)}">${v}%</em>`).join('')}</span><span></span></div>
     ${sorted.map(r=>`<button class="dot-row ${r.id===sel.id?'on':''}" onclick="pickRow(${r.id})" aria-pressed="${r.id===sel.id}"><span class="dot-name">${esc(r.name)}</span><span class="dot-track"><i class="dot-avg" style="left:${x(avg)}"></i><span class="dot-pt ${r.engagement>=avg?'up':'down'}" style="left:${x(r.engagement)};${r.engagement>=avg?`background:${color}`:''}"></span></span><span class="dot-val">${r.engagement}%</span><span class="dot-vol">${r.volume}% of posts</span></button>`).join('')}
     <div class="dots-foot">Average of these ${sorted.length}: <strong>${avg.toFixed(1)}%</strong></div>
-  </div>`;
-}
-function columnsHTML(rows,color,sel){
-  const sorted=rows.slice().sort((a,b)=>(b.engagement-a.engagement)||(b.posts-a.posts)).slice(0,10);
-  const max=Math.max(...sorted.map(r=>r.engagement),1);
-  return `<div class="vcols" role="list">
-    ${sorted.map(r=>`<button class="vcol ${r.id===sel.id?'on':''}" onclick="pickRow(${r.id})" aria-pressed="${r.id===sel.id}" title="${esc(r.name)} · ${r.engagement}% ER · ${r.posts} posts"><span class="vcol-val">${r.engagement}%</span><span class="vcol-bar"><span style="height:${(r.engagement/max*100).toFixed(1)}%;background:${color}"></span></span><span class="vcol-name">${esc(r.name)}</span></button>`).join('')}
-  </div>`;
-}
-function barsHTML(rows,color,sel){
-  const sorted=rows.slice().sort((a,b)=>(b.engagement-a.engagement)||(b.posts-a.posts));
-  const max=Math.max(...sorted.map(r=>r.engagement),1);
-  return `<div class="hbars">
-    <div class="hbar-head"><span>Classification</span><span>Engagement</span><span>ER</span><span>Volume</span><span>Posts</span></div>
-    ${sorted.map(r=>`<div class="hbar-row ${r.id===sel.id?'on':''}" role="button" tabindex="0" onclick="pickRow(${r.id})" aria-pressed="${r.id===sel.id}"><span class="hbar-name">${esc(r.name)}</span><span class="hbar-track"><span style="width:${(r.engagement/max*100).toFixed(1)}%;background:${color}"></span></span><span class="hbar-num">${r.engagement}%</span><span class="hbar-num muted">${r.volume}%</span><span class="hbar-num muted">${r.posts}</span></div>`).join('')}
   </div>`;
 }
 function paintPerfArea(){ const el=document.getElementById('perfArea'); if(el) el.innerHTML=perfAreaHTML(); }
@@ -2131,18 +845,6 @@ function perfAreaHTML(){
     </div>
 `}
   </div>`;
-}
-function bubbleSVG(rows,color,sel){
-  const W=560,H=320,L=44,R=16,T=16,B=44;
-  const px=v=>L+(Math.min(42,v)/42)*(W-L-R), py=v=>H-B-(Math.min(8,v)/8)*(H-T-B);
-  const grid=[0,2,4,6,8].map(v=>`<line x1="${L}" x2="${W-R}" y1="${py(v)}" y2="${py(v)}" stroke="#dbeafe"/><text x="${L-8}" y="${py(v)+4}" text-anchor="end" font-size="11" fill="#94a3b8">${v}%</text>`).join('');
-  const xt=[0,10,20,30,40].map(v=>`<text x="${px(v)}" y="${H-B+18}" text-anchor="middle" font-size="11" fill="#94a3b8">${v}%</text>`).join('');
-  const bubbles=rows.map(r=>{ const on=r.id===sel.id, rad=5+Math.sqrt(r.likes/185)*13;
-    return `<circle class="bubble" cx="${px(r.volume).toFixed(1)}" cy="${py(r.engagement).toFixed(1)}" r="${rad.toFixed(1)}" fill="${color}" fill-opacity="${on?.8:.36}" stroke="${on?'#1e40af':'#ffffff'}" stroke-width="${on?2.5:1.4}" tabindex="0" role="button" aria-label="${esc(r.name)}" onclick="pickRow(${r.id})"><title>${esc(r.name)} · ${r.posts} posts · ${r.engagement}%</title></circle>`; }).join('');
-  return `<svg class="bubble-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Creative volume versus engagement">${grid}${xt}
-    <line x1="${L}" x2="${W-R}" y1="${py(4)}" y2="${py(4)}" stroke="#60a5fa" stroke-dasharray="4 5"/>
-    <text x="${W/2}" y="${H-6}" text-anchor="middle" font-size="12" fill="#64748b">Creative volume (% of posts)</text>
-    <text transform="translate(14 ${H/2}) rotate(-90)" text-anchor="middle" font-size="12" fill="#64748b">Engagement rate</text>${bubbles}</svg>`;
 }
 function strategyRelatedPosts(item,dim){
   const t=(item.name||'').toLowerCase(); let base=[];
@@ -2273,9 +975,7 @@ function verdictCard(name,score,label,headline,desc,foot){
   </div>`;
 }
 function selectReport(name){ S.report=name; paintBody(); }
-function setReport(name){ S.report=name; paintBody(); }
 const FINDINGS=[['good','People commenting appear real','98% look real','Commenter profiles mostly credible.'],['good','Comments read like real conversation','0 timing bursts','No concentrated comment bursts.'],['warn','Views do not always match engagement','1 of 9 flagged','One post has unusual views for its engagement.'],['muted','Comment quality could not be measured','Not measured','No reliable text-quality check available.']];
-const SIGNS={good:'✓',warn:'⚠',muted:'○'};
 function signChip(k){ return `<span class="sign ${k}">${k==='good'?icon('check','ico-sm'):k==='warn'?icon('alert','ico-sm'):'○'}</span>`; }
 function authenticityHTML(){
   const deeper=[['How the score is calculated','The demonstration score combines commenter credibility, conversation patterns, engagement consistency, and available evidence. Actual production weighting is not represented here.'],['All authenticity signals','Commenter credibility: positive. Timing bursts: none found. Engagement consistency: one anomaly. Comment quality: not measured.'],['Notes from the evaluation',S.notes.length?S.notes.join(' · '):'No team notes yet. Add notes from the sidebar or creator overview.'],['Evidence and limitations','9 of 10 selected posts were available. Public signals cannot prove authenticity with certainty.']];
@@ -2292,11 +992,9 @@ const STAGES=[
   {name:'Content',w:20,score:70,q:'Is this the kind of content you want to be in?',a:'Styling reels shot at home, which the brief prefers.',d:'Home-styled reels match the brief’s format.'},
   {name:'Topics',w:15,score:48,q:'Do they cover what you asked for?',a:'Ethnic wear appears often; gifting only twice in 142 posts.',d:'Ethnic wear in 31 of 142 posts. Gifting appears twice, only as outfit captions. No fast-fashion hauls.',links:['Show the 2 gifting posts','Show 31 ethnic wear posts'],open:true}
 ];
-const CRITERIA=[['good','Content relevance','Strong alignment with lifestyle and wellness.'],['warn','Audience geography','United States is the top location; India is secondary.'],['good','Audience gender','Female-skewing audience aligns with target.'],['good','Category experience','Previous skincare and beauty collaborations.'],['muted','Competitive overlap','Review existing brand relationships before outreach.']];
 function fitLabel(s){ return s>=70?'Good fit':s>=55?'Fair fit':'Weak fit'; }
 const EVALUATED_CAMPAIGNS=['Diwali Gifting 2026','Winter Denim Drop'];
 const CAMPAIGN_SCORES={'Diwali Gifting 2026':72,'Winter Denim Drop':61,'Wellness Creators Q4':58,'Summer Lifestyle Launch':49};
-const CAMPAIGN_TAGS={'Diwali Gifting 2026':['Conversion','gifting','ethnic wear','avoid: fast-fashion hauls','exclusivity'],default:['Awareness','lifestyle','everyday']};
 function brandFitHTML(){
   const c=S.campaign, evaluated=EVALUATED_CAMPAIGNS.includes(c);
   return `<div class="between"><div><h2 class="report-h">Brand Fit · ${esc(c)}</h2><p class="section-sub">Campaign-specific fit for this creator</p></div><span class="chip ai">${evaluated?'Evaluated':'Not evaluated'}</span></div>
@@ -2343,14 +1041,12 @@ function brandRailHTML(){
     <div class="row" style="margin-top:10px"><button class="btn sm primary" onclick="runBrandFit()">${icon('refresh','ico-sm')}Re-evaluate</button><button class="btn sm" onclick="toast('Opening the brief on the plan (demo)')">Edit brief</button></div></div>`;
 }
 function setCampaign(name){ S.campaign=name; paintBody(); }
-function setTargetBrand(b){ S.brand=b; paintBody(); }
 function refreshReport(){
   showModal('Refresh evaluation',`<p class="note">This will simulate refreshing the ${S.report} report. Existing results remain visible until completion.</p>`,
     `<button class="btn primary" onclick="confirmRefresh()">Refresh</button>`);
 }
 function confirmRefresh(){ S.reportRefreshed=true; S.reportStatus='Refreshed'; closeLayer(); paintBody(); toast('Demo evaluation refreshed. Score unchanged.'); }
 function runBrandFit(){ closeLayer(); toast('Brand fit evaluation queued for '+S.brand+' (demo)'); }
-function retryMissing(){ S.postsRead=10; paintBody(); toast('Missing post retried successfully (demo)'); }
 function changePosts(){
   showModal('Change posts used in evaluation',`<p class="note">Select example posts for a new report. This changes local coverage only.</p><div class="check-list">${POSTS.slice(0,10).map(p=>`<label class="check-row"><input type="checkbox" name="evalposts" checked value="${p.id}">${esc(p.title)} · ${p.format}</label>`).join('')}</div>`,
     `<button class="btn primary" onclick="saveEvalPosts()">Save selection</button>`);
@@ -2406,24 +1102,6 @@ function pCollabs(){
   </div>`;
 }
 function setCollab(k,v){ S.collab[k==='type'?'type':k==='period'?'period':'signal']=v; if(k==='type') S.collab.signal='All'; paintBody(); }
-function sortedBrands(){
-  const C=S.collab, key=C.sortKey, dir=C.sortDir;
-  const val=b=>key==='name'?b.name:key==='relationship'||key==='content'?b.count:key==='views'?parseFloat(b.views):key==='eng'?parseFloat(b.eng):key==='paid'?b.paid:Date.parse(b.last+' 2026');
-  return BRANDS.slice().sort((a,b)=>{const av=val(a),bv=val(b);return dir*(typeof av==='number'?av-bv:String(av).localeCompare(String(bv)));});
-}
-function collabTableHTML(){
-  const cols=[['name','Brand'],['relationship','Relationship'],['content','Content'],['views','Avg views'],['eng','Eng.'],['paid','Paid'],['last','Last seen']];
-  const C=S.collab;
-  const head=cols.map(([k,l])=>`<th><button class="sort-btn" onclick="sortCollab('${k}')">${l}<span class="arrow">${C.sortKey===k?(C.sortDir>0?'↑':'↓'):'↕'}</span></button></th>`).join('')+'<th>Evidence</th>';
-  const rows=sortedBrands().map((b,i)=>{
-    let rel=POSTS.filter(p=>p.brand===b.name).slice(0,3); if(!rel.length) rel=POSTS.slice(i*2,i*2+2);
-    return `<tr data-brand="${esc(b.name.toLowerCase())}"><td>${brandLine(b)}</td><td><span class="rel ${b.count>1?'':'one'}">${b.count>1?'Repeat':'One-off'}</span></td><td class="num">${b.count}</td><td class="num">${b.views}</td><td class="num">${b.eng}</td><td class="num">${b.paid}</td><td>${b.last}</td>
-      <td><div class="evidence">${rel.map(p=>`<button onclick="openPost(${p.id})" aria-label="Open ${esc(b.name)} content"><img loading="lazy" src="${photo(p)}" alt=""></button>`).join('')}</div></td></tr>`;
-  }).join('');
-  return `<div class="table"><table><thead><tr>${head}</tr></thead><tbody id="collabRows">${rows}</tbody></table></div><p class="note" style="margin-top:8px">${BRANDS.length} brands · Click an evidence thumbnail to inspect the post</p>`;
-}
-function sortCollab(k){ const C=S.collab; if(C.sortKey===k) C.sortDir*=-1; else { C.sortKey=k; C.sortDir=k==='name'?1:-1; } document.getElementById('collabTable').innerHTML=collabTableHTML(); }
-function filterCollabBrands(v){ const q=v.trim().toLowerCase(); document.querySelectorAll('#collabRows tr').forEach(r=>r.style.display=r.dataset.brand.includes(q)?'':'none'); }
 function openCollab(id){
   const e=COLLABS.find(x=>x.id===id), p=POSTS.find(x=>x.id===e.post)||POSTS[0], b=BRANDS.find(x=>x.name===e.name);
   const d=new Date(e.date+'T12:00:00Z').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'});
@@ -2614,13 +1292,8 @@ const DISC=[
 ];
 function syncNav(){ syncPinned(); const cur={plan:'campaigns',shortlist:'campaigns',campaign:'campaigns',collection:'collections','content-tracker':'campaigns'}[S.page]||S.page; document.querySelectorAll('.nav a.nav-row[data-page]').forEach(a=>{ const on=a.dataset.page===cur; a.classList.toggle('on',on); on?a.setAttribute('aria-current','page'):a.removeAttribute('aria-current'); }); }
 function setPage(p){ if(p==='shortlist'){ p='campaigns'; S.campTab='draft'; } if(p==='tracker') S.dashTab='tracker'; else if(p==='dashboard'&&S.dashTab==='tracker') S.dashTab='overview'; S.page=p; S.discCreator=null; S.myCreator=null; paintHeader(); paintBody(true); window.scrollTo(0,0); }
-function setDisc(k,v){ S[k]=v; paintBody(); }
-function setDiscFilter(v){ S.discFilter=v; paintBody(); const i=document.querySelector('.disc-search input'); if(i){ i.focus(); i.setSelectionRange(v.length,v.length); } }
 function addDisc(id){ if(!isInMy(id)) S.discAdded.push(id); const dc0=DISC.find(x=>x.id===id); if(dc0)dc0.repo=false; paintBody(); { const dc=DISC.find(x=>x.id===id); addToast('Successfully added',`${dc?dc.name:'Creator'} has been successfully added to`,'My creators',()=>{ S.discCreator=null; setPage('creators'); }); } }
-function openDiscCreator(id){ S.discCreator=id; S.tab=0; S.menu=null; paintHeader(); paintBody(true); window.scrollTo(0,0); }
 
-const nameBtn=(c,fn)=>`<button onclick="${fn}('${c.id}')" style="background:none;border:0;padding:0;font:inherit;font-weight:500;color:var(--ink-strong);cursor:pointer;text-align:left">${esc(c.name)}</button>`;
-const personCell=(c,fn)=>`<div class="row" style="flex-wrap:nowrap;gap:10px">${dsAv(c.id,c.name)}<div style="min-width:0"><div>${nameBtn(c,fn)}</div><span class="muted" style="font-size:12px">${esc(c.handle)}</span></div></div>`;
 function listPage(){ return ['discover','creators','collections','collection','shortlist','dashboard','tracker','campaigns','content-tracker','plan','campaign','settings'].includes(S.page); }
 function detailId(){ return S.page==='discover'?S.discCreator:S.page==='creators'?S.myCreator:null; }
 function crumbHTML(){
@@ -2637,169 +1310,9 @@ function creatorActivity(c){
   const plans=CAMP_PLANS.filter(p=>(p.shortlisted||[]).includes(c.id));
   return {posts,plans};
 }
-function creatorScores(c,plan){
-  const h=avHash(c.id+(plan?plan.id:'')); const pick=k=>60+((h>>>k)%36);
-  const fit=pick(0), branded=pick(4), benchmark=pick(8);
-  return {fit,branded,benchmark,overall:Math.round(fit*.5+branded*.25+benchmark*.25)};
-}
 const shortDate=d=>{ const t=new Date(d); return isNaN(t)?esc(d||''):t.toLocaleDateString('en-GB',{day:'numeric',month:'short'}); };
-/* ── Journey with PLIX: per-creator history (real records + deterministic illustrative events) ── */
-const J_TITLES=['Ingredient spotlight','Morning routine + before-after','Honest 7-day test','Get ready with me','Behind the product','Unboxing and first impressions','Day in my life','Quick tips I use daily','Real skin, real results','Routine in 30 seconds'];
-const J_PRODUCTS=['Glow Serum','Festive Kit','Hydrating Toner','Guava Facewash','Summer Sunscreen','Night Repair Cream'];
-const J_MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const rnd=seed=>{let x=(seed>>>0)||7;return()=>{x^=x<<13;x>>>=0;x^=x>>>17;x^=x<<5;x>>>=0;return (x%10000)/10000;};};
 const pad2=n=>String(n).padStart(2,'0');
-function journeyOf(c){
-  const m=mx(c); const {posts,plans}=creatorActivity(c);
-  const R=rnd(avHash(c.id)+13);
-  const camps=CAMP_LIST.filter(x=>(x.creatorIds||[]).includes(c.id));
-  const ev=[];
-  plans.forEach(p=>ev.push({date:p.created,kind:'shortlist',plan:p.name,score:creatorScores(c,p).overall}));
-  CAMP_PLANS.filter(p=>!(p.shortlisted||[]).includes(c.id)&&(p.creators||[]).includes(c.id))
-    .forEach(p=>ev.push({date:p.created,kind:'planadd',plan:p.name}));
-  camps.forEach(x=>ev.push({date:x.created,kind:'campaign',name:x.name,cost:(x.posts||[]).find(q=>q.creator===c.id)?.cost||0}));
-  posts.forEach(p=>ev.push({date:p.date,kind:'post',campaign:p.campaign,title:p.product||'Reel',views:p.views,organic:p.organic||0,boosted:(p.paid||0)>0,cost:p.cost||0}));
-  // illustrative extra reels (0–2) in generated campaigns, each with its campaign-add
-  const extra=Math.floor(R()*3);
-  for(let i=0;i<extra;i++){
-    const mo=3+Math.floor(R()*8), day=1+Math.floor(R()*27);
-    const prod=J_PRODUCTS[Math.floor(R()*J_PRODUCTS.length)], cname=`${prod} ${J_MON[mo-1]}`;
-    const date=`2026-${pad2(mo)}-${pad2(day)}`, cost=(8+Math.floor(R()*28))*1000, boosted=R()>0.6;
-    const views=(40+Math.floor(R()*260))*1000;
-    ev.push({date:`2026-${pad2(mo)}-${pad2(Math.max(1,day-14))}`,kind:'campaign',name:cname,cost});
-    ev.push({date,kind:'post',campaign:cname,title:J_TITLES[Math.floor(R()*J_TITLES.length)],views,organic:Math.round(views*(boosted?0.6:0.9)),boosted,cost});
-  }
-  // rate changes: an earlier, lower rate that moved up to the current rate
-  if(m.cost){
-    const from=Math.max(1000,Math.round(m.cost*(0.7+R()*0.2)/500)*500);
-    const rd=`2026-${pad2(4+Math.floor(R()*4))}-${pad2(1+Math.floor(R()*27))}`;
-    ev.push({date:rd,kind:'rate',from,to:m.cost});
-    const addDate=`2026-${pad2(2+Math.floor(R()*2))}-${pad2(1+Math.floor(R()*27))}`;
-    ev.push({date:addDate,kind:'added',source:['Manual','Discover','CSV import'][Math.floor(R()*3)],initial:from});
-  }
-  ev.sort((a,b)=>String(b.date).localeCompare(String(a.date)));
-  const counts={camps:ev.filter(e=>e.kind==='campaign').length,reels:ev.filter(e=>e.kind==='post').length,shorts:ev.filter(e=>e.kind==='shortlist').length};
-  return {ev,counts};
-}
-const monthKey=d=>String(d||'').slice(0,7);
-const monthName=d=>{const t=new Date(d); if(isNaN(t)) return ''; const mm=t.toLocaleDateString('en-GB',{month:'short'}); return String(d).slice(0,4)==='2026'?mm:`${mm} ${String(d).slice(0,4)}`;};
-function journeyItemHTML(e){
-  const money=v=>'₹'+Number(v).toLocaleString('en-IN');
-  switch(e.kind){
-    case 'shortlist': return {dot:'plan',title:`<span class="cs-verb is-plan">Shortlisted</span> in <b>${esc(e.plan)}</b>`,sub:`<span class="cs-meta">Score <b class="cs-score-n">${e.score}</b> · Approved</span>`};
-    case 'planadd': return {dot:'plan',title:`<span class="cs-verb is-plan">Added</span> to plan <b>${esc(e.plan)}</b>`,sub:''};
-    case 'campaign': return {dot:'camp',title:`<span class="cs-verb is-camp">Added to campaign</span> <b>${esc(e.name)}</b>`,sub:e.cost?`<span class="cs-meta">Cost agreed: ${money(e.cost)}</span>`:''};
-    case 'rate': { const pct=Math.round((e.to-e.from)/e.from*100); return {dot:'rate',title:`Rate changed to <b>${money(e.to)}</b>`,sub:`<span class="cs-meta">was ${money(e.from)} · <span class="cs-up">+${pct}%</span></span>`}; }
-    case 'added': return {dot:'added',title:`<span class="cs-verb">Added to My Creators</span>`,sub:`<span class="cs-meta">Source: ${esc(e.source)} · Initial rate: ${money(e.initial)}</span>`};
-    case 'post': return {dot:'post',title:`<span class="cs-verb is-post">Reel published</span> in <b>${esc(e.campaign)}</b>`,
-      card:`<div class="cs-post"><span class="cs-thumb" aria-hidden="true">${icon('play','ico-sm')}</span><div class="cs-post-text"><b>${esc(e.title)}</b><span>${fmt(e.views)} views · <span class="cs-tag ${e.boosted?'cs-tag--boost':'cs-tag--org'}">${e.boosted?'Boosted':'Organic'}</span>${e.cost?` · ${money(e.cost)}`:''}</span></div></div>`};
-    default: return {dot:'',title:'',sub:''};
-  }
-}
-function cqTab(id,t){ S.cqTab=t; if(S.cqFromMy) openMyQuick(id); else openCreatorSide(id); }
-function cqCurrentCampaign(c){
-  const live=CAMP_LIST.filter(x=>(x.creatorIds||[]).includes(c.id)&&x.status==='Active').sort((a,b)=>String(b.created).localeCompare(String(a.created)));
-  return live[0]?live[0].name:null;
-}
-function cqCampGroups(posts){
-  const names=[...new Set(posts.map(p=>p.campaign))];
-  return names.map(n=>({name:n,posts:posts.filter(p=>p.campaign===n),camp:CAMP_LIST.find(x=>x.name===n)}))
-    .sort((a,b)=>String(b.camp?.created||'').localeCompare(String(a.camp?.created||'')));
-}
-function setCqScope(id,v){ S.cqScope=v; openCreatorSide(id); }
-function cqThumb(p){
-  const f=p.format||'Post';
-  const LBL={Reel:'Reel',Carousel:'Car.',Post:'Post',Static:'Img',Video:'Video',Short:'Short'};
-  return `<a class="cq-th" href="${esc(p.url||'#')}" target="_blank" rel="noopener" title="${esc(p.product||f)}" style="background:${PL_COL[f]||'#475569'}"><b>${esc(LBL[f]||f)}</b></a>`;
-}
-function capPerCampaign(ps,n=3){ const seen={}; return [...ps].sort((a,b)=>String(b.date).localeCompare(String(a.date))).filter(p=>{ seen[p.campaign]=(seen[p.campaign]||0)+1; return seen[p.campaign]<=n; }); }
-function cqStatsOf(ps){ const v=ps.reduce((x,p)=>x+(p.views||0),0), sp=ps.reduce((x,p)=>x+(p.cost||0),0); return {views:v,spent:sp,n:ps.length,cpv:v&&sp?sp/v:0}; }
-function cqPlixTimelineHTML(groups,curName,avg=0,lim=10){
-  if(!groups.length) return '<p class="ds-caption cq-empty">No campaigns with Plix yet.</p>';
-  let lastMonth='';
-  return `<ol class="cs-tl">${groups.map(g=>{
-    const key=g.camp.created||g.posts[0]?.date||'';
-    const mk=monthKey(key); let h='';
-    if(mk!==lastMonth){ lastMonth=mk; h=`<li class="cs-month"><span class="cs-month-l">${monthName(key)}</span><span class="cs-month-ring" aria-hidden="true"></span></li>`; }
-    const isCur=g.name===curName, live=g.camp.status==='Active';
-    const st=cqStatsOf(g.posts);
-    const tag=isCur?'Current':live?'Live':'Completed';
-    const stats=`<div class="cq-jc-stats"><div><span>Posts</span><b>${st.n}</b></div><div><span>Average CPV</span><b>${st.cpv?'₹'+st.cpv.toFixed(2):'—'}</b><small>${rupees(st.spent)} spent</small></div><div><span>Views</span><b>${st.views?fmt(st.views):'—'}</b></div><div><span>Boost spend</span><b>${rupees(g.posts.filter(p=>(p.paid||0)>0).reduce((x,p)=>x+(p.cost||0),0))}</b></div></div>`;
-    const sortedPosts=[...g.posts].sort((x,y)=>String(y.date).localeCompare(String(x.date)));
-    const rowOf=p=>{ const d=avg?((p.views||0)-avg)/avg*100:null; const dv=d==null?'':`<span class="cq-var ${d>=0?'is-up':'is-down'}">${d>=0?'▲':'▼'} ${Math.abs(Math.round(d))}%</span>`; return `<div class="cq-inst-r">${cqThumb(p)}<div class="cq-inst-t"><b>${esc(p.product||'Post')}</b><span>${shortDate(p.date)}${(p.paid||0)>0?' · Boosted':''}</span></div><span class="cq-inst-n">${fmt(p.views||0)} views ${dv}</span><span class="cq-inst-n">${rupees(p.cost||0)}</span><span class="cq-inst-n">CPV ${cpvOf(p.cost||0,p.views||0)}</span></div>`; };
-    const LIM=lim;
-    const rowsHTML=sortedPosts.length
-      ?`<div class="cq-inst">${sortedPosts.slice(0,LIM).map(rowOf).join('')}${sortedPosts.length>LIM?`<details class="cq-more"><summary>Show ${sortedPosts.length-LIM} more post${sortedPosts.length-LIM===1?'':'s'}</summary><div class="cq-inst cq-inst--rest">${sortedPosts.slice(LIM).map(rowOf).join('')}</div></details>`:''}</div>`
-      :'<p class="ds-caption">No posts yet.</p>';
-    const body=rowsHTML;
-    return h+`<li class="cs-ev"><span class="cs-date">${shortDate(key)}</span><span class="cs-dot cs-dot--${isCur?'plan':'campaign'}" aria-hidden="true"></span><div class="cs-ev-body"><div class="cq-jc${isCur?' is-current':''}"><div class="cq-jc-h"><div><b>${esc(g.name)}</b><span>${esc(g.camp.product||'')} · Launched ${shortDate(g.camp.created)}</span></div><span class="cq-live">${tag}</span></div>${stats}${body}</div></div></li>`;
-  }).join('')}</ol>`;
-}
-function cqTimelineHTML(ev){
-  if(!ev.length) return '<p class="ds-caption cq-empty">No journey yet.</p>';
-  let lastMonth='';
-  return `<ol class="cs-tl">${ev.map(e=>{
-    const mk=monthKey(e.date); let h='';
-    if(mk!==lastMonth){ lastMonth=mk; h=`<li class="cs-month"><span class="cs-month-l">${monthName(e.date)}</span><span class="cs-month-ring" aria-hidden="true"></span></li>`; }
-    const it=journeyItemHTML(e);
-    return h+`<li class="cs-ev"><span class="cs-date">${shortDate(e.date)}</span><span class="cs-dot cs-dot--${it.dot}" aria-hidden="true"></span><div class="cs-ev-body"><span class="cs-ev-title">${it.title}</span>${it.sub?`<span class="cs-ev-sub">${it.sub}</span>`:''}${it.card||''}</div></li>`;
-  }).join('')}</ol>`;
-}
-function creatorSideHTML(c){
-  const m=mx(c); const posts=capPerCampaign(creatorActivity(c).posts,3); const {ev,counts}=journeyOf(c);
-  const spent=posts.reduce((a,p)=>a+(p.cost||0),0)||m.cost;
-  const views=posts.reduce((a,p)=>a+(p.views||0),0);
-  const plan=creatorActivity(c).plans[0]; const sc=plan?creatorScores(c,plan):null;
-  const bfScore=creatorScores(c,plan).fit;
-  const tone=v=>v>=80?'is-ok':v>=60?'is-warn':'is-low';
-  // Audience split is illustrative until a creator is evaluated
-  const rng=discRng(discSeedRepo('aud'+c.id));
-  const female=Math.round(38+rng()*34);
-  const ageRaw=[['13–17',3+rng()*5],['18–24',20+rng()*15],['25–34',30+rng()*12],['35–44',12+rng()*10],['45+',4+rng()*8]];
-  const ageTotal=ageRaw.reduce((a,x)=>a+x[1],0);
-  const ages=ageRaw.map(([l,v])=>[l,Math.round(v/ageTotal*100)]);
-  const topAge=ages.reduce((a,b)=>b[1]>a[1]?b:a);
-  const cities=[m.state,...MY_CITIES.filter(x=>x!==m.state).slice(0,2)].map((x,i)=>[x,[42,27,15][i]]);
-  const maxViews=Math.max(1,...posts.map(p=>p.views||0));
-  const kpis=`<style>.cq-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));margin-top:20px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;background:#ffffff}.cq-kpi{padding:14px 16px;background:#ffffff;border:0;border-left:1px solid #e2e8f0;border-radius:0;box-shadow:none;min-width:0}.cq-kpi:first-child{border-left:0}.cq-kpi .mqq-kl{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;color:#0f172a}.cq-kpi .mqq-kl svg{display:none !important}.cq-kpi .mqq-kl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cq-kpi .mqq-kl *{background:none !important;border:0 !important;box-shadow:none !important;padding:0 !important;border-radius:0 !important}.cq-kpi .mqq-kl svg{width:14px;height:14px;color:#1d4ed8;stroke:#1d4ed8;flex:none}.cq-kpi{padding:14px 12px !important}.cq-kpi b{font-size:16px !important;white-space:nowrap}.cq-kpi b{display:block;margin-top:8px;font-size:20px;font-weight:700;color:#0f172a;letter-spacing:-.01em}.cq-kpi b small{margin-left:4px;font-size:12px;font-weight:500;color:#0f172a}</style><div class="cq-kpis">
-      <div class="cq-kpi"><span class="mqq-kl">${icon('user','ico-sm')}Followers</span><b>${fmt(c.followers)}</b></div>
-      <div class="cq-kpi"><span class="mqq-kl">${icon('heart','ico-sm')}Engagement</span><b>${m.engagement}%</b></div>
-      <div class="cq-kpi"><span class="mqq-kl">${icon('shield','ico-sm')}Authenticity</span><b class="${m.auth!=null?tone(m.auth):''}">${m.auth??'—'}<small>${m.auth!=null?'/100':''}</small></b></div>
-      <div class="cq-kpi"><span class="mqq-kl">${icon('target','ico-sm')}Brand fit</span><b class="${tone(bfScore)}">${bfScore}<small>/100</small></b></div>
-      <div class="cq-kpi"><span class="mqq-kl">${icon('layers','ico-sm')}Top age</span><b>${topAge[0]}<small>${topAge[1]}%</small></b></div>
-    </div>`;
-  const cqTabs=[['campaign','This campaign'],['lifetime','Lifetime'],['notes','Notes']];
-  const tab=['campaign','lifetime','notes'].includes(S.cqTab)?S.cqTab:'campaign';
-  const tabBar=`<nav class="cq-tabs" role="tablist" aria-label="Creator sections">${cqTabs.map(([k,l])=>`<button type="button" role="tab" aria-selected="${tab===k}" class="${tab===k?'is-on':''}" onclick="cqTab('${c.id}','${k}')">${l}</button>`).join('')}</nav>`;
-
-  // Left rail: shortlist score only (SPOC and notes moved into the tabs; audience removed)
-  const rail='';
-  const curName=cqCurrentCampaign(c);
-  const statsOf=cqStatsOf;
-  const lifeAvg=posts.length?posts.reduce((x,p)=>x+(p.views||0),0)/posts.length:0;
-  const statRow=(ps)=>{const st=statsOf(ps); return `<div class="cq-stats"><div><span>Views</span><b>${st.views?fmt(st.views):'—'}</b></div><div><span>Avg CPV</span><b>${st.cpv?'₹'+st.cpv.toFixed(2):'—'}</b></div><div><span>Total spent</span><b>${rupees(st.spent)}</b></div><div><span>Posts</span><b>${st.n}</b></div></div>`;};
-  const spocRow=`<label class="cq-field cq-spoc"><span>SPOC</span><select class="ds-select" aria-label="SPOC for ${esc(c.name)}" onchange="setSpoc('${c.id}',this.value)">${['Karan','Ankit','Unassigned'].map(o=>`<option value="${o}" ${o===m.owner?'selected':''}>${o}</option>`).join('')}</select></label>`;
-  let body='';
-  if(tab==='campaign'){
-    const curPosts=curName?posts.filter(p=>p.campaign===curName):[];
-    const sorted=[...curPosts].sort((x,y)=>String(y.date).localeCompare(String(x.date)));
-    const lifeAvg=posts.length?posts.reduce((x,p)=>x+(p.views||0),0)/posts.length:0;
-    const curCamp=curName?CAMP_LIST.find(x=>x.name===curName):null;
-    const node=curCamp?cqPlixTimelineHTML([{name:curName,camp:curCamp,posts:curPosts}],curName,lifeAvg,5):'<p class="ds-caption cq-empty">No live campaign with this creator.</p>';
-    body=`<section class="cq-sec">${spocRow}${statRow(curPosts)}</section>
-      <section class="cq-sec"><div class="cq-sec-head"><h4>Timeline</h4></div>${node}</section>`;
-
-  } else if(tab==='lifetime'){
-    const groups=CAMP_LIST.filter(x=>(x.creatorIds||[]).includes(c.id)).map(x=>({name:x.name,camp:x,posts:posts.filter(p=>p.campaign===x.name)})).sort((x,y)=>String(y.camp.created).localeCompare(String(x.camp.created)));
-    body=`<section class="cq-sec" id="cq-history">${statRow(posts)}</section>
-      <section class="cq-sec" id="cq-journey"><div class="cq-sec-head"><h4>Journey with Plix</h4><span class="cq-summary">${groups.length} campaign${groups.length===1?'':'s'}</span></div>${cqPlixTimelineHTML(groups,curName,lifeAvg)}</section>`;
-  } else {
-    body=`<section class="cq-sec cq-notes"><div class="cq-sec-head"><h4>Notes</h4><span class="cq-summary">Visible to your team</span></div>
-      <textarea class="cq-notes-box" rows="8" aria-label="Notes for ${esc(c.name)}" placeholder="Add a note for your team…" oninput="setCreatorNote('${c.id}',this.value)">${esc((S.cNotes||{})[c.id]||'')}</textarea></section>`;
-  }
-  const metaRow=(c.tags||[]).length?`<div class="cq-meta">${(c.tags||[]).slice(0,3).map(t=>`<span class="cq-tagx">${esc(t)}</span>`).join('')}</div>`:'';
-  return `<div class="cq"><div class="cq-layout cq-layout--solo">${rail}<div class="cq-main">${metaRow}${kpis}${tabBar}<div class="cq-body" role="tabpanel">${body}</div></div></div></div>`;
-}
 /* Creator overview: the dashboard's Posts timeline, scoped to this creator */
 function setCrPer(v){ S.crPer=v; paintBody(); }
 function setCrCust(k,v){ S.crCust={...(S.crCust||{}),[k]:v}; paintBody(); }
@@ -2809,17 +1322,9 @@ function crTimelineHTML(){
   const rr=rangeOf(per,cust), crMonthly=!(rr&&rr.from.slice(0,7)===rr.to.slice(0,7));
   return `<section class="section cr-tl-sec">${periodBarHTML({scope:'This creator only',value:per,cust,opts:PERIOD_OPTS,set:'setCrPer(',setCust:'setCrCust'})}<div class="dk-main dw-grid cr-tl-grid${crMonthly?' cr-tl-mo':''}"><div class="dw-cell dw-full" data-w="timeline">${timelineHTML({camps,value:per,cust,scope:'This creator only',title:'Posts timeline',split:true})}</div></div></section>`;
 }
-function setCreatorNote(id,v){ S.cNotes=S.cNotes||{}; S.cNotes[id]=v; }
-function changeSpoc(id){
-  const c=DISC.find(x=>x.id===id); if(!c) return; const cur=mx(c).owner;
-  showModal('Change SPOC',`<div class="ds-page ds-dlg"><div class="ds-form">${dlgSel('SPOC','spocSel',['Karan','Ankit','Unassigned'],cur)}</div></div>`,
-    `<button class="ds-btn ds-btn--outline" onclick="openCreatorSide('${id}')">Cancel</button><button class="ds-btn ds-btn--primary" onclick="saveSpoc('${id}')">Save</button>`);
-}
-function setSpoc(id,v){ MYC[id]={...(MYC[id]||{}),owner:v}; paintBody(); openCreatorSide(id); toast('SPOC updated'); }
 function isEvaluatedCreator(c){return !!c&&isInMy(c.id)&&mx(c).auth!=null;}
 function limitedDetail(){const id=detailId(); const c=id?crOf(id):null; return !!c&&!isEvaluatedCreator(c);}
 function evaluateCreatorNow(id){const c=crOf(id); if(!c)return; if(!isInMy(id))addToCreator(id,'my'); MYC[id]={...(MYC[id]||{}),auth:60+avHash(id)%36}; paintBody(); toast(`${c.name} evaluated`);}
-function basicCreatorFacts(c){const m=mx(c); return [['Category',esc((c.tags||[]).join(', ')||'—')],['Tier',esc(c.tier||'—')],['Followers',fmt(c.followers)],['Average views',fmt(c.views)],['Location',esc(m.state||'—')],['Source',esc(c.source||'—')]].map(([k,v])=>`<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');}
 function unevaluatedCtas(c){return isInMy(c.id)?`<button class="ds-btn ds-btn--primary" onclick="closeLayer();evaluateCreatorNow('${c.id}')">Evaluate</button>`:`<button class="ds-btn ds-btn--primary" onclick="closeLayer();addToCreator('${c.id}','my')">Add to my creators</button>`;}
 
 const SH_CSS=`
@@ -2887,7 +1392,6 @@ function sheetLimitedBody(c){
     ${sheetPart('sky',SH_I.users,'Audience','Audience breakdown is available after evaluation.')}
   </div>`);
 }
-function basicSideHTML(c){ return sheetLimitedBody(c); }
 function unevaluatedExtra(c){return `<span class="qv-action-add">${unevaluatedCtas(c)}</span><button class="ds-btn ds-btn--outline ds-btn--sm" onclick="blacklistCreator('${c.id}')">Blacklist</button>`;}
 function basicProfilePageHTML(c){const back=S.page==='discover'?'Discover':'My creators';return `<div class="ds-page"><nav class="ds-crumb"><button class="ds-link" onclick="closeDetail()">${back}</button><span>/</span><span>${esc(c.name)}</span></nav><div class="ds-head"><div><h1 class="ds-page-title">${esc(c.name)}</h1><p class="ds-page-desc">${esc(c.handle)} · Not evaluated yet</p></div><div class="ds-actions">${unevaluatedCtas(c)}</div></div>${sheetLimitedBody(c)}</div>`;}
 const SOC_SVG={
@@ -3005,58 +1509,7 @@ function openCreatorSide(id){
   openDrawer(`${dsAv(c.id,c.name).replace('class="ds-avatar"','class="ds-avatar cq-hav"')}<span>${esc(c.name)}</span><span class="cq-hstatus"><i></i>${esc(m.status)}</span>`,`${esc(c.handle)} · ${esc(m.state)} · ${esc(c.tier)}`,msdHTML(c),isEvaluatedCreator(c)?extra:sheetSocialHTML(c)+unevaluatedExtra(c));
   const d=document.querySelector('#layer .ds-drawer'); if(d) d.classList.add('ds-drawer--side','cq-drawer');
 }
-/* ── My creators quick view (row click): metrics, scores, campaigns and shortlists with redirects ── */
-function qvListHTML(c){
-  if(S.qvTab==='lists'){ const lists=listsOfCreator(c.id);
-    return lists.length?lists.map(p=>`<button type="button" class="mq-row is-list" onclick="closeLayer();openPlan('${p.id}')"><span class="mq-row-n">${esc(p.name)}</span><span class="mq-row-m">${(p.creators||[]).length} creators</span>${CT_ARROW}</button>`).join(''):'<span class="mq-none">Not in any shortlist yet</span>'; }
-  const camps=campsOfCreatorAll(c.id);
-  return camps.length?camps.map(x=>`<button type="button" class="mq-row is-camp" onclick="closeLayer();openCampaign('${x.id}')"><span class="mq-row-n">${esc(x.name)}</span><span class="mq-row-m mqq-st is-${String(x.status||'').toLowerCase()}">${esc(x.status||'')}</span>${CT_ARROW}</button>`).join(''):'<span class="mq-none">Not added to any campaign yet</span>';
-}
-function qvTab(k){
-  S.qvTab=k; const c=DISC.find(x=>x.id===S.qvId); if(!c) return;
-  document.querySelectorAll('.qv-tabs button').forEach(b=>b.classList.toggle('on',b.dataset.k===k));
-  const el=document.getElementById('qvList'); if(el) el.innerHTML=qvListHTML(c);
-}
-function myQuickHTML(c){
-  const m=mx(c), r=myEval(c), bf=bfScore(c), camps=campsOfCreatorAll(c.id), lists=listsOfCreator(c.id);
-  const tone=v=>v>=80?'is-ok':v>=60?'is-warn':'is-low';
-  const scored=[m.auth,bf].filter(v=>v!=null);
-  const overall=Math.round(scored.reduce((a,v)=>a+v,0)/scored.length);
-  const stat=(l,v)=>`<div class="qv-stat"><span>${l}</span><b>${v}</b></div>`;
-  const score=(l,v)=>`<div class="qv-score"><span>${l}</span><b class="${tone(v)}">${v}</b><i class="qv-sbar"><i class="${tone(v)}" style="width:${v}%"></i></i></div>`;
-  const tab=(k,l,n)=>`<button type="button" data-k="${k}" class="${(S.qvTab||'camps')===k?'on':''}" onclick="qvTab('${k}')">${l}<em>${n}</em></button>`;
-  S.qvId=c.id; if(!S.qvTab) S.qvTab='camps';
-  return `<div class="mq">
-    <div class="qv-stats">${stat('Followers',fmt(c.followers))}${stat('Engagement',m.engagement+'%')}${stat('Avg views',c.views?fmt(c.views):'—')}${stat('Total cost',m.cost?rupees(m.cost):'—')}</div>
-    <div class="qv-scores"><div class="qv-scores-h"><span>Scores</span><small>${r.analysed} of ${r.total} posts analysed</small></div>
-      <div class="qv-score-row">${m.auth!=null?score('Authenticity',m.auth):''}${score('Brand fit',bf)}${score('Overall',overall)}</div></div>
-    <div class="qv-tabs" role="tablist">${tab('camps','Campaigns',camps.length)}${tab('lists','Campaign plans',lists.length)}</div>
-    <div id="qvList" class="mq-rows">${qvListHTML(c)}</div>
-  </div>`;
-}
 
-function myQuickBodyHTML(c){
-  const m=mx(c), posts=(creatorActivity(c).posts||[]).slice().sort((x,y)=>String(y.date).localeCompare(String(x.date))), camps=campsOfCreatorAll(c.id), lists=listsOfCreator(c.id);
-  const evaluated=m.auth!=null, bf=bfScore(c);
-  const KI={'Followers':'user','Engagement':'heart','Authenticity':'shield','Brand fit':'target'};
-  const TN={'Followers':'violet','Engagement':'rose','Authenticity':'teal','Brand fit':'indigo','Top age':'amber'};
-  const kl=l=>`<span class="mqq-kl">${icon(KI[l],'ico-sm')}${l}</span>`;
-  const kpi=(l,v,sub)=>`<div class="mqq-kpi" data-k="${TN[l]||''}">${kl(l)}<b class="${['Authenticity','Brand fit'].includes(l)?(Number(v)>=80?'is-ok':Number(v)>=60?'is-warn':'is-low'):''}">${v}</b>${sub?`<small>${sub}</small>`:''}</div>`;
-  const pend=l=>`<div class="mqq-kpi is-pending">${kl(l)}<b>Not yet</b><small>Needs evaluation</small></div>`;
-  const kpis=`<div class="mqq-kpis">${kpi('Followers',fmt(c.followers))}${kpi('Engagement',m.engagement+'%')}${evaluated?kpi('Authenticity',m.auth,'/100'):pend('Authenticity')}${evaluated?kpi('Brand fit',bf,'/100'):pend('Brand fit')}</div>`;
-  const note=evaluated?'':`<p class="mqq-note">Newly added. Evaluate to unlock authenticity, brand fit and audience.</p>`;
-  const rel=`<dl class="mqq-facts"><div><dt>Tier</dt><dd>${esc(c.tier)}</dd></div><div><dt>Campaign plans</dt><dd>${lists.length}</dd></div></dl>`;
-  const campRows=camps.length?camps.map(x=>`<button type="button" class="mq-row is-camp" onclick="closeLayer();openCampaign('${x.id}')"><span class="mq-row-n">${esc(x.name)}</span><span class="mq-row-m mqq-st is-${String(x.status||'').toLowerCase()}">${esc(x.status||'')}</span>${CT_ARROW}</button>`).join(''):'<span class="mq-none">Not in a campaign yet</span>';
-  const listRows=lists.length?lists.map(p=>`<button type="button" class="mq-row is-list" onclick="closeLayer();openPlan('${p.id}')"><span class="mq-row-n">${esc(p.name)}</span><span class="mq-row-m">${(p.creators||[]).length} creators</span>${CT_ARROW}</button>`).join(''):'<span class="mq-none">Not in any shortlist yet</span>';
-  const recent=posts.length?`<section class="cq-sec mqq-sec" data-t="violet"><div class="cq-sec-head"><h4>Recent posts</h4><span class="cq-summary">${posts.length} total</span></div><div class="mqq-posts">${posts.slice(0,3).map(p=>`<div class="mqq-post"><span>${campDate(p.date)}</span><span>${esc(p.campaign||'')}</span><b>${fmt(p.views||0)} views</b></div>`).join('')}</div></section>`:'';
-  return `<div class="mqq">
-    ${kpis}${note}
-    <section class="cq-sec mqq-sec" data-t="indigo"><div class="cq-sec-head"><h4>Relationship</h4></div>${rel}</section>
-    <section class="cq-sec mqq-sec" data-t="teal"><div class="cq-sec-head"><h4>Campaigns with Plix</h4><span class="cq-summary">${camps.length}</span></div><div class="mq-rows">${campRows}</div></section>
-    ${recent}
-    <section class="cq-sec mqq-sec" data-t="amber"><div class="cq-sec-head"><h4>Shortlists</h4><span class="cq-summary">${lists.length}</span></div><div class="mq-rows">${listRows}</div></section>
-  </div>`;
-}
 function openMyQuick(id){
   const c=DISC.find(x=>x.id===id); if(!c) return;
   S.cqFromMy=true;
@@ -3067,23 +1520,6 @@ function openMyQuick(id){
 }
 function toggleMySel(id,on){ S.mySel=on?[...new Set([...S.mySel,id])]:S.mySel.filter(x=>x!==id); paintBody(); }
 function setMy(k,v){ S[k]=v; paintBody(); }
-function myAdvToggle(){ S.myAdvOpen=!S.myAdvOpen; paintBody(); }
-function myAdvCount(){ return ['myGender','myState','mySpoc'].filter(k=>S[k]!=='All').length; }
-function myAdvClear(){ S.myGender='All'; S.myState='All'; S.mySpoc='All'; paintBody(); }
-function myAdvPanel(uniq){
-  const sub=(label,inner)=>`<div class="disc-sub"><span class="disc-sublabel">${label}</span>${inner}</div>`;
-  return `<aside class="disc-adv" aria-label="Filters"><div class="disc-adv-head"><strong>Filters</strong><button type="button" class="ds-iconbtn" aria-label="Close filters" onclick="myAdvToggle()">&times;</button></div>
-    <div class="disc-adv-body"><div class="disc-adv-sec">
-      <details class="disc-grp" open><summary>Creator</summary><div class="disc-grp-body">
-        ${sub('Gender',MY_FILTER('myGender','Gender',['F','M'],S.myGender))}
-        ${sub('State',MY_FILTER('myState','State',uniq('state'),S.myState))}
-      </div></details>
-      <details class="disc-grp" open><summary>Ownership</summary><div class="disc-grp-body">
-        ${sub('SPOC',MY_FILTER('mySpoc','SPOC',uniq('owner').filter(x=>x!=='Unassigned'),S.mySpoc))}
-      </div></details>
-    </div></div>
-    <div class="disc-foot disc-adv-foot"><button class="ds-btn ds-btn--ghost" onclick="myAdvClear()">Clear filters</button><span class="ds-caption">${myAdvCount()} applied</span></div></aside>`;
-}
 function setMyQ(v){ S.myQ=v; paintBody(); const i=document.querySelector('.ds-toolbar input'); if(i){ i.focus(); i.setSelectionRange(v.length,v.length); } }
 const MYC={cr1:{owner:'Ankit',status:'In discussion',cost:5000,auth:93,engagement:62.24,hist:1},cr2:{owner:'Karan',status:'Shortlisted',cost:300000,auth:86,engagement:2.9,hist:0},cr3:{owner:'Unassigned',status:'Considering',cost:3500,auth:null,engagement:4.2,hist:0},cr4:{owner:'Ankit',status:'Collaborated',cost:25000,auth:91,engagement:4.8,hist:1},cr5:{owner:'Karan',status:'Considering',cost:120000,auth:95,engagement:3.7,hist:0},cr6:{owner:'Unassigned',status:'Considering',cost:50000,auth:94,engagement:0.11,hist:0},cr7:{owner:'Karan',status:'Collaborated',cost:210000,auth:88,engagement:2.4,hist:1},cr8:{owner:'Ankit',status:'Collaborated',cost:9500,auth:92,engagement:5.3,hist:1}};
 const MY_CITIES=['Mumbai','Delhi','Bangalore','Pune','Chennai','Hyderabad','Kolkata'];
@@ -3110,7 +1546,6 @@ const myLink=(label,fn)=>`<button type="button" class="my-link" onclick="event.s
 const MY_COL_LABEL={tags:'Tags',niche:'Niche',medianViews:'Median views',expCpv:'Expected CPV',bestViews:'Best case views',bestCpv:'Best case CPV',consistency:'Consistency',momentum:'Momentum',verdict:'AI verdict',views:'Avg views',launch:'Launch',brandfit:'Brand Fit',evaluate:'Evaluate',region:'Region',dealtier:'Deal Tier',followers:'Followers',tier:'Tier',gender:'Gender',state:'State',cost:'Cost',cpv:'CPV',er:'Engagement',authenticity:'Authenticity',content:'Content',strategy:'Strategy Report',added:'Added',campaigns:'Campaigns',shortlists:'In lists',ongoing:'Ongoing campaigns',spoc:'SPOC',score:'Score',status:'Status'};
 const MY_COL_NUM=new Set(['views','followers','cost','cpv','er','score','ongoing','medianViews','expCpv','bestViews','bestCpv','momentum']);
 function ensureMyCols(){ if(S.myCols&&!S.myCols.some(c=>c.key==='tags')) S.myCols=[...S.myCols,{key:'tags',on:true}]; if(!S.myCols){ S.myCols=[...MY_DEFAULT_COLS.map(k=>({key:k,on:true})),...MY_EXTRA_COLS.map(k=>({key:k,on:false}))]; S.myCustom={}; S.myCF={}; } }
-const plansOfCreator=id=>CAMP_PLANS.filter(p=>(p.shortlisted||[]).includes(id)).map(p=>p.name);
 /* Lists a creator belongs to (any list they were added to, via Add to list) */
 const listsOfCreator=id=>CAMP_PLANS.filter(p=>(p.creators||[]).includes(id));
 const campsOfCreatorAll=id=>CAMP_LIST.filter(c=>(c.creatorIds||[]).includes(id));
@@ -3273,40 +1708,6 @@ function myRowMenu(id,btn){
   const r=btn.getBoundingClientRect();
   S.myRowMenu={id,x:Math.round(r.right),y:Math.round(r.bottom+6)}; paintBody();
 }
-/* One control for search and pick: type to filter, pick from the panel; "create" appears when the typed text matches nothing */
-const CB={};
-function cbHTML(k,ph,label){ return `<div class="cb" data-cb="${k}"><span class="cb-chev" aria-hidden="true">${icon('chevDown','ico-sm')}</span><input class="cb-in" id="cbq-${k}" role="combobox" aria-autocomplete="list" aria-expanded="false" autocomplete="off" placeholder="${esc(ph)}" value="${esc(label||'')}" oninput="cbFilter('${k}')" onclick="cbFilter('${k}')" onblur="setTimeout(()=>cbClose('${k}'),150)" onkeydown="cbKey(event,'${k}')"><input type="hidden" id="cbv-${k}" value=""><div class="cb-panel" id="cbp-${k}" role="listbox" hidden></div></div>`; }
-function cbFilter(k){
-  const inp=document.getElementById('cbq-'+k), panel=document.getElementById('cbp-'+k), hid=document.getElementById('cbv-'+k); if(!inp||!panel) return;
-  const q=inp.value.trim(), ql=q.toLowerCase(), cur=hid.value;
-  const cfg=CB[k]||{opts:[]};
-  const list=cfg.opts.filter(o=>!ql||o.label.toLowerCase().includes(ql)||(o.sub||'').toLowerCase().includes(ql));
-  const exact=cfg.opts.some(o=>o.label.toLowerCase()===ql);
-  const make=cfg.create&&q&&!exact?[{v:'new:'+q,label:`${cfg.create} “${q}”`,sub:'New'}]:[];
-  const all=[...make,...list];
-  panel.innerHTML=all.map(o=>`<button type="button" class="cb-opt${o.v===cur?' is-on':''}" role="option" data-v="${esc(o.v)}" onmousedown="event.preventDefault();cbPick('${k}','${esc(o.v)}')"><span class="cb-opt-t">${esc(o.label)}</span>${o.sub?`<small>${esc(o.sub)}</small>`:''}</button>`).join('')||'<div class="cb-empty">No matches</div>';
-  panel.hidden=false; inp.setAttribute('aria-expanded','true');
-}
-function cbPick(k,v){
-  const cfg=CB[k]||{opts:[]}; const inp=document.getElementById('cbq-'+k), hid=document.getElementById('cbv-'+k);
-  hid.value=v;
-  if(v.startsWith('new:')){ inp.value=v.slice(4); }
-  else { const o=cfg.opts.find(x=>x.v===v); if(o) inp.value=o.label; }
-  cbClose(k); if(cfg.onpick) cfg.onpick(v);
-}
-function cbClose(k){
-  const p=document.getElementById('cbp-'+k); if(p) p.hidden=true;
-  const inp=document.getElementById('cbq-'+k); if(inp) inp.setAttribute('aria-expanded','false');
-  const hid=document.getElementById('cbv-'+k), cfg=CB[k]; if(!inp||!hid||!cfg) return;
-  if(!hid.value){ inp.value=''; return; }
-  if(hid.value.startsWith('new:')){ inp.value=hid.value.slice(4); return; }
-  const o=cfg.opts.find(x=>x.v===hid.value); inp.value=o?o.label:'';
-}
-function cbKey(e,k){
-  if(e.key==='Escape'){ cbClose(k); return; }
-  if(e.key==='ArrowDown'){ e.preventDefault(); cbFilter(k); return; }
-  if(e.key==='Enter'){ e.preventDefault(); const first=document.querySelector(`#cbp-${k} .cb-opt`); if(first) cbPick(k,first.dataset.v); }
-}
 /* Direct add to a campaign */
 function myRowAct(kind,id){
   if(kind==='plan'){ S.myRowMenu=null; return cpOpen([id]); }
@@ -3411,14 +1812,6 @@ function myCfgHTML(){
       <div class="disc-cfg-foot"><button type="button" class="ds-btn ds-btn--ghost" onclick="myCfgClose()">Cancel</button><button type="button" class="ds-btn ds-btn--primary" onclick="myCfgDone()">Done</button></div>
     </div></div>`;
 }
-function addMyCol(){
-  const heading=dlgVal('colHead'); if(!heading) return toast('Enter a column heading');
-  const def=dlgVal('colVal'); const key='cf'+Date.now();
-  S.myCustom[key]={label:heading}; S.myCols.push({key,on:true});
-  DISC.forEach(c=>{ S.myCF[c.id]=S.myCF[c.id]||{}; S.myCF[c.id][key]=def; });
-  paintBody(); openColumns(); toast('Column added');
-}
-function openColumns(){ myColsToggle(); }
 const MY_FILTER=(k,label,arr,val)=>`<label class="ds-filter${val!=='All'?' is-active':''}"><span>${val!=='All'?esc(val):label}</span><select aria-label="${label}" onchange="setMy('${k}',this.value)">${['All',...arr].map(x=>`<option value="${esc(x)}" ${x===val?'selected':''}>${esc(x)}</option>`).join('')}</select>${val!=='All'?`<button class="ds-filter-x" aria-label="Clear ${label}" onclick="event.preventDefault();setMy('${k}','All')">×</button>`:''}</label>`;
 /* ── Bulk actions: one toolbar button, one modal with a step per action ── */
 const BULK_OPTS=[
@@ -3427,10 +1820,6 @@ const BULK_OPTS=[
   {k:'remove',t:'Remove',d:'Take these creators out of My creators.',ico:'<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/>',danger:true}
 ];
 const bulkSelected=()=>S.mySel.map(id=>DISC.find(c=>c.id===id)).filter(Boolean);
-function bulkBtnHTML(){
-  const n=S.mySel.length, off=n<2;
-  return `<span class="bulk-wrap${off?' is-off':''}" data-tip="Select more than 1 creator to access this"><button type="button" class="ds-btn ds-btn--outline ds-btn--sm${off?' is-disabled':''}" aria-disabled="${off}" onclick="bulkOpen()">${discSvg('<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',14)}Bulk actions${n?` <span class="ds-count">${n}</span>`:''}</button><span class="bulk-tip" role="tooltip">Select more than 1 creator to access this</span></span>`;
-}
 function bulkBarHTML(){
   const sel=bulkSelected(), n=sel.length, hist=sel.filter(c=>mx(c).hist>0).length;
   const btn=o=>`<button type="button" class="bb-btn${o.danger?' is-danger':''}" onclick="bulkRun('${o.k}')">${discSvg(o.ico,15)}${o.t}</button>`;
@@ -3608,8 +1997,6 @@ document.addEventListener('mouseout',e=>{ const t=e.target.closest&&e.target.clo
 document.addEventListener('focusin',e=>{ const t=e.target.closest&&e.target.closest('.ds-hcount'); if(t) hpopShow(t); });
 document.addEventListener('focusout',e=>{ if(e.target.closest&&e.target.closest('.ds-hcount')) hpopHide(); });
 function closeDiscCreator(){ S.discCreator=null; paintHeader(); paintBody(true); window.scrollTo(0,0); }
-function setDiscTab(i){ S.discTab=i; paintBody(); }
-const VIEWS=[pOverview,pContent,pPerformance,pReports,pCollabs,pAudience];
 /* ── Add Creators dialog: paste handles or import a CSV ── */
 /* 12b: score creators that have no authenticity evaluation yet */
 function autoScoreMy(){
@@ -3769,15 +2156,6 @@ function addCreatorsHTML(){
       <div class="addn-foot"><span class="addn-sum"><b id="addc-sum">${n}</b> creator${n===1?'':'s'} ready<span class="ap-badnote" id="addc-badnote">${addcBadNote()}</span></span><div class="addn-actions"><button type="button" class="ds-btn ds-btn--ghost" onclick="addcClose()">Cancel</button><button type="button" id="addc-submit" class="ds-btn ds-btn--primary" ${n?'':'disabled'} onclick="addcSubmit()">${m==='paste'?'Add creators':'Import'}</button></div></div>
     </div></div>`;
 }
-function saveNewDisc(){
-  const name=(document.getElementById('nc-name').value||'').trim();
-  if(!name){ toast('Enter a creator name'); return; }
-  const handle=(document.getElementById('nc-handle').value||'').trim()||'@'+name.toLowerCase().replace(/[^a-z0-9]+/g,'');
-  const followers=Math.max(0,parseInt(document.getElementById('nc-followers').value,10)||0);
-  const tier=document.getElementById('nc-tier').value;
-  DISC.unshift({id:'cn'+Date.now(),name,handle:handle.startsWith('@')?handle:'@'+handle,followers,views:Math.round(followers*0.04),tier,tags:[],source:'Inspiration',collabs:0,likes:0,last:'Just now'});
-  closeLayer(); paintBody(); toast('Creator added to Discover');
-}
 const DISC_META={
   cr1:{country:'India',engagement:5.1,platforms:['Instagram','YouTube']},
   cr2:{country:'United States',engagement:3.2,platforms:['Instagram','TikTok']},
@@ -3855,7 +2233,6 @@ function discToggleArr(k,v){ const cur=[...(discDraft()[k]||[])]; const i=cur.in
 function discDraftPatch(o){ S[advK().d]={...discDraft(),...o}; discRepaint(); }
 function discReset(){ S[advK().d]={db:'Creator database',mode:'Standard',...DISC_ADV_EMPTY}; discRepaint(); }
 function discDraftCount(){ const d=discDraft(); if(d.db==='Meta Marketplace') return 0; const base=S.advScope==='my'?DISC.filter(c=>!c.repo):DISC; return base.filter(c=>advMatchWith(c,d)).length; }
-function advCount(a){ return Object.entries(a||{}).filter(([k,v])=>!['collab','prompt','db','mode'].includes(k)&&(Array.isArray(v)?v.length:(v!==''&&v!=null))).length; }
 function discApply(){
   const K=advK(), d=discDraft();
   S[K.a]={...DISC_ADV_EMPTY,...d};
@@ -4667,22 +3044,13 @@ const dsMedia=seed=>`<span class="ds-media" style="${pastelStyle(seed)}"><svg vi
 const AV_PAL=['#7c3aed','#9d174d','#1d4ed8','#c2410c','#075985','#15803d','#1e40af','#c2410c','#be185d','#1e40af'];
 const avHash=v=>{let h=0;for(const ch of String(v))h=(h*31+ch.charCodeAt(0))>>>0;return h;};
 const dsAv=(seed,name)=>`<span class="ds-avatar" style="background:${AV_PAL[avHash(seed)%AV_PAL.length]}" title="${esc(name||'')}">${esc(initialsOf(name||'?'))}</span>`;
-const dsUser=()=>'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#64748b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>';
 const dsStack=ids=>`<div class="ds-avatar-stack">${ids.slice(0,3).map(id=>dsAv(id,cNameOf(id))).join('')}${ids.length>3?`<span class="ds-avatar-more">+${ids.length-3}</span>`:''}</div>`;
 const dsBadge=(t,v='')=>`<span class="ds-badge${v?' ds-badge--'+v:''}">${esc(t)}</span>`;
 /* creator tier as a coloured tag: each tier has its own hue */
 const TIER_TAG={Nano:['#eff6ff','#5b21b6'],Micro:['#f0fdf4','#166534'],Macro:['#eff6ff','#1d4ed8'],Mega:['#fffbeb','#c2410c']};
 const tierTag=t=>{ const c=TIER_TAG[t]||['#f1f5f9','#1e40af']; return `<span class="tier-tag is-${String(t||'none').toLowerCase()}" style="background:${c[0]};color:${c[1]}">${esc(t||'—')}</span>`; };
-/* ── UI components (visual kit). Visual-only helpers; screens compose these. ── */
-const uiDot=t=>`<span class="ds-dot ds-dot--${t}" aria-hidden="true"></span>`;
-const uiScore=(n,band='')=>`<span class="ds-score">${n}${band?' '+uiDot(band):''}</span>`;
-const uiChip=(t,tone='')=>`<span class="ds-chip${tone?' ds-chip--'+tone:''}">${t}</span>`;
-const uiCallout=(tone,text,action='')=>`<div class="ds-callout ds-callout--${tone}" role="status"><span>${text}</span>${action}</div>`;
-const uiProgress=(pct,tone='')=>{const v=Math.max(0,Math.min(100,Number(pct)||0));return `<div class="ds-progress${tone?' ds-progress--'+tone:''}" role="progressbar" aria-valuenow="${v}" aria-valuemin="0" aria-valuemax="100"><i style="width:${v}%"></i></div>`;};
-const uiAccordion=(title,meta,body,open=false)=>`<details class="ds-acc"${open?' open':''}><summary><span>${title}</span><span class="ds-acc-meta">${meta}</span><span class="ds-chev">${icon('chevDown','ico-sm')}</span></summary><div class="ds-acc-body">${body}</div></details>`;
 function setPageState(k,v,focus){ S[k]=v; paintBody(); if(focus){ const i=document.querySelector(focus); if(i){ i.focus(); i.setSelectionRange(v.length,v.length); } } }
 const dsSearch=(k,label,val)=>`<div class="ds-input"><span class="ds-input-icon">${icon('search','ico-sm')}</span><input aria-label="${label}" placeholder="${label}" value="${esc(val)}" oninput="setPageState('${k}',this.value,'.ds-toolbar input')"></div>`;
-const dsSeg=(k,opts,val)=>`<div class="ds-tabs" role="tablist">${opts.map(([v,l,n])=>`<button type="button" role="tab" aria-selected="${val===v}" class="${val===v?'on':''}" onclick="setPageState('${k}','${v}')">${l}${n!==undefined?` <span class="ds-count">${n}</span>`:''}</button>`).join('')}</div>`;
 const dsFilter=(k,label,opts,val)=>{const cur=opts.find(o=>o[0]===val)||opts[0];const on=val!=='All'&&val!=='All content';return `<label class="ds-filter${on?' is-active':''}"><span>${on?esc(cur[1]):label}</span><select aria-label="${label}" onchange="setPageState('${k}',this.value)">${opts.map(([v,l])=>`<option value="${v}" ${v===val?'selected':''}>${esc(l)}</option>`).join('')}</select>${on?`<button class="ds-filter-x" aria-label="Clear ${label}" onclick="event.preventDefault();setPageState('${k}','All')">×</button>`:''}</label>`;};
 
 const PLAN_STAGES=['New','Creators added','Approval','Approved','Rejected'];
@@ -4704,10 +3072,6 @@ function collectionManage(id){const c=colOf(id);if(!c)return;const rows=DISC.fil
 function collectionManageSave(id){const c=colOf(id);if(!c)return;c.creatorIds=[...document.querySelectorAll('.col-choice:checked')].map(x=>x.value);colSave();closeLayer();paintBody();}
 function collectionRemove(cid,id){const c=colOf(cid);if(!c)return;c.creatorIds=c.creatorIds.filter(x=>x!==id);colSave();paintBody();}
 function collectionToggle(id,on){const a=new Set(S.collectionSelected||[]);on?a.add(id):a.delete(id);S.collectionSelected=[...a];paintBody();}
-function collectionUseBrief(cid){const c=colOf(cid),ids=(S.collectionSelected||[]).length?S.collectionSelected:(c?.creatorIds||[]);if(!ids.length)return toast('Select creators first');if(!CAMP_PLANS.length)return toast('Create a campaign plan first');dlg('Add creators to a campaign plan',`${ids.length} creators will be copied into the campaign plan's candidate pool. The collection stays unchanged.`,`<div class="ds-form"><label class="ds-field"><span>Campaign plan</span><select id="colBriefTarget">${CAMP_PLANS.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select></label></div>`,`<button class="ds-btn ds-btn--outline" onclick="closeLayer()">Cancel</button><button class="ds-btn ds-btn--primary" onclick="collectionUseBriefDo('${cid}')">Add to planner</button>`);}
-function collectionUseBriefDo(cid){const c=colOf(cid),ids=(S.collectionSelected||[]).length?S.collectionSelected:(c?.creatorIds||[]),p=planOf(document.getElementById('colBriefTarget')?.value);if(!p)return;ids.forEach(id=>{if(!p.creators.includes(id))p.creators.push(id);});invalidatePlanApproval(p);S.collectionSelected=[];closeLayer();openPlan(p.id);toast(`${ids.length} creators added as candidates`);}
-function addCreatorToCollectionFromQuick(id){colBoot();const opts=CREATOR_COLLECTIONS.map(c=>`<label class="ds-check"><input type="checkbox" class="qv-col-choice" value="${c.id}" ${c.creatorIds.includes(id)?'checked':''}><span>${esc(c.name)} <small>${c.creatorIds.length} creators</small></span></label>`).join('');dlg('Add to collections','Collections are reusable groups. Tick every collection this creator should belong to. Saving does not add the creator to a campaign plan.',`<div class="ds-form">${opts||'<p class="ds-caption">No collections yet.</p>'}</div>`,`<button class="ds-btn ds-btn--outline" onclick="closeLayer()">Cancel</button><button class="ds-btn ds-btn--primary" onclick="addCreatorToCollectionDo('${id}')">Save</button>`);}
-function addCreatorToCollectionDo(id){colBoot();const chosen=[...document.querySelectorAll('.qv-col-choice:checked')].map(x=>x.value);CREATOR_COLLECTIONS.forEach(c=>{const has=c.creatorIds.includes(id),want=chosen.includes(c.id);if(want&&!has)c.creatorIds.push(id);if(!want&&has)c.creatorIds=c.creatorIds.filter(x=>x!==id);});colSave();const keep=S.cqFromMy;closeLayer();openCreatorSide(id);S.cqFromMy=keep;toast('Collections updated');}
 function collectionCopyDialog(cid){colBoot();const ids=S.collectionSelected||[];if(!ids.length)return toast('Select creators first');const others=CREATOR_COLLECTIONS.filter(c=>c.id!==cid);if(!others.length)return toast('Create another collection first');dlg('Add selected to another collection',`${ids.length} selected creators will be added to the collection you choose. They stay in this collection.`,`<div class="ds-form"><label class="ds-field"><span>Collection</span><select id="colCopyTarget">${others.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></label></div>`,`<button class="ds-btn ds-btn--outline" onclick="closeLayer()">Cancel</button><button class="ds-btn ds-btn--primary" onclick="collectionCopyDo()">Add to collection</button>`);}
 function collectionCopyDo(){colBoot();const t=colOf(document.getElementById('colCopyTarget')?.value);const ids=S.collectionSelected||[];if(!t||!ids.length)return;ids.forEach(id=>{if(!t.creatorIds.includes(id))t.creatorIds.push(id);});colSave();closeLayer();paintBody();toast(`${ids.length} creators added to ${t.name}`);}
 const TIER_ORDER=['Nano','Micro','Macro','Mega'];
@@ -4730,7 +3094,6 @@ function noteEdit(key){const n=noteGet(key);dlg('Edit note','Changes apply to th
 function noteSave(key){const lead=(document.getElementById('noteLead')?.value||'').trim(),body=(document.getElementById('noteBody')?.value||'').trim();if(!lead&&!body)return toast('Add some note text first');noteSaveAll(key,{lead,body});closeLayer();paintBody();toast('Note saved');}
 const colQuoted=c=>{const cs=c.creatorIds.map(id=>crOf(id)).filter(Boolean);const costs=cs.map(x=>Number(mx(x).cost)||0);return {n:cs.length,cost:costs.reduce((s,v)=>s+v,0),quoted:costs.filter(v=>v>0).length,er:cs.length?cs.reduce((s,x)=>s+(Number(mx(x).engagement)||0),0)/cs.length:0,tiers:TIER_ORDER.map(t=>[t,cs.filter(x=>x.tier===t).length])};};
 const colDate=iso=>iso?new Date(iso+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'}):'—';
-const colTabOf=c=>{const k=c.campaignId?campOf(c.campaignId):null;return k&&k.status==='Active'?'live':'draft';};
 function tierBarHTML(t){
  const tot=t.reduce((s,[,k])=>s+k,0);
  if(!tot)return '<span class="ds-table-meta">No creators</span>';
@@ -4920,7 +3283,6 @@ function nlFile(input){
   r.onload=()=>{ const rows=String(r.result).split(/\r?\n/).map(l=>addcNorm(l.split(',')[0])).filter(x=>x&&!/^(handle|username|instagram)$/i.test(x)); S.nlCsv={name:f.name,handles:[...new Set(rows)].slice(0,500)}; paintBody(); };
   r.readAsText(f);
 }
-function nlManual(){ S.nlOpen=false; paintBody(); openPlanForm('new'); }
 function nlCreate(){
   const name=(S.nlName||'').trim(); if(!name||!S.nlCsv) return;
   const matched=[], missing=[];
@@ -5079,9 +3441,6 @@ function dsFilterD(k,label,opts,val){
   return `<label class="ds-filter${on?' is-active':''}"><span>${on?esc(cur[1]):label}</span><select aria-label="${label}" onchange="setDash('${k}',this.value)">${opts.map(([v,l])=>`<option value="${esc(v)}" ${v===val?'selected':''}>${esc(l)}</option>`).join('')}</select>${on?`<button class="ds-filter-x" aria-label="Clear ${label}" onclick="event.preventDefault();setDash('${k}','All')">×</button>`:''}</label>`;
 }
 const uniq=a=>[...new Set(a.filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b)));
-const optsOf=(list,label)=>[['All',label],...list.map(x=>[x,x])];
-/* Sample sentiment label per post (deterministic, marked as sample data in the UI) */
-const sentimentOf=p=>{const h=avHash(p.id)%100;return h<58?'Positive':h<84?'Neutral':'Negative';};
 /* Sentiment is not classified by the backend yet: show a placeholder instead of invented values */
 const SENT_NA_TIP='Comment sentiment is not classified yet. It appears here once the backend classifier is connected.';
 const sentNAHTML=(extra='')=>`<div class="sent-na${extra}" title="${SENT_NA_TIP}"><span class="sent-na-t">Not yet available</span><span class="sent-na-s">Comment sentiment is not classified yet</span></div>`;
@@ -5090,52 +3449,15 @@ function segRows(posts,keyFn){
   posts.forEach(p=>{const k=keyFn(p)||'Unknown';(groups[k]=groups[k]||[]).push(p);});
   return Object.entries(groups).map(([name,ps])=>({name,posts:ps,views:sumOf(ps,'views'),spend:sumOf(ps,'cost')})).sort((a,b)=>b.views-a.views);
 }
-function segTable(title,key,posts,keyFn){
-  const rows=segRows(posts,keyFn);
-  return `<section class="ds-seg-block"><span class="ds-section-title">${title}</span><div class="ds-table-wrap"><table class="ds-table ds-table--fit"><thead><tr><th>Segment</th><th class="ds-num">Posts</th><th class="ds-num">Views</th><th class="ds-num">Spend</th><th class="ds-num">CPV</th><th>Action</th></tr></thead>
-    <tbody>${rows.map(r=>`<tr><td>${esc(r.name)}</td><td class="ds-num">${r.posts.length}</td><td class="ds-num">${exactN(r.views)}</td><td class="ds-num">${rupees(r.spend)}</td><td class="ds-num">${cpvOf(r.spend,r.views)}</td><td><button class="ds-namebtn" onclick="openSegment('${esc(key)}','${esc(r.name)}')">View posts →</button></td></tr>`).join('')||'<tr><td colspan="6" class="ds-empty">No posts for this filter.</td></tr>'}</tbody></table></div></section>`;
-}
-/* side overlay (ported from uploaded prototype: right-hand posts drawer with Table / Gallery) */
-let DRAWER={rows:[],title:'',view:'table'};
 const COLS_SVG='<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 4v16"/>';
 const X_SVG='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
 function openDrawer(title,sub,bodyHTML,headExtra='',cls=''){
   closeLayer();
   document.getElementById('layer').insertAdjacentHTML('beforeend',`<div class="ds-drawer-back" onclick="if(event.target===this)closeLayer()"><aside class="ds-page ds-drawer${cls?' '+cls:''}" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="ds-drawer-head"><div><h2>${title}</h2><p>${sub}</p></div><div class="ds-drawer-actions">${headExtra}<button class="ds-icon-btn" aria-label="Close" title="Close" onclick="closeLayer()" style="width:32px;height:32px;padding:0;border:0;background:transparent;box-shadow:none;display:grid;place-items:center;color:#0f172a;border-radius:8px">${X_SVG.replace('<svg ','<svg style="display:block" ')}</button></div></div><div class="ds-drawer-body">${bodyHTML}</div></aside></div>`);
 }
-function galleryTile(p){ return `<button class="ds-tile" onclick="openPost('${p.id}')">${dsMediaVideo(p.id)}<strong>${esc(cNameOf(p.creator))}</strong><span>${esc(p.product)}</span><span>${exactN(p.views)} views · ${rupees(p.cost)}</span></button>`; }
-function postsDrawer(title,rows){ DRAWER={rows,title,view:'table'}; paintPostsDrawer(); }
-function paintPostsDrawer(){
-  const r=DRAWER.rows;
-  openDrawer(esc(DRAWER.title),`${r.length} published post${r.length===1?'':'s'} · Based on the current reporting period and selections`,
-    r.length?(DRAWER.view==='table'?postTableHTML(r,true):`<div class="ds-gallery">${r.map(galleryTile).join('')}</div>`):'<p class="ds-caption">No matching posts for these filters.</p>',
-    `<div class="ds-seg"><button class="${DRAWER.view==='table'?'on':''}" onclick="DRAWER.view='table';paintPostsDrawer()">☷ Table</button><button class="${DRAWER.view==='gallery'?'on':''}" onclick="DRAWER.view='gallery';paintPostsDrawer()">▦ Gallery</button></div>`);
-}
-const SEG_LABEL={gender:'Gender',state:'State / geography',tier:'Influencer tier',concept:'Creative concept',product:'Product'};
-function openSegment(key,val){
-  const rows=dashPosts().filter(p=>{const v=key==='product'?p.product:key==='concept'?p.concept:key==='tier'?crAttr(p.creator,'tier'):crAttr(p.creator,key);return (v||'Unknown')===val;});
-  postsDrawer(`${SEG_LABEL[key]||key} · ${val}`,rows);
-}
 
-function trendHover(i){
-  const tip=document.getElementById('trendTip'), g=document.getElementById('trendGuide'), dot=document.getElementById('trendDot');
-  if(!tip||!window.__trend) return;
-  if(i<0||!window.__trend[i]){ tip.hidden=true; g.setAttribute('opacity',0); dot.setAttribute('opacity',0); return; }
-  const t=window.__trend[i];
-  g.setAttribute('x1',t.x); g.setAttribute('x2',t.x); g.setAttribute('opacity',1);
-  dot.setAttribute('cx',t.x); dot.setAttribute('cy',t.y); dot.setAttribute('opacity',1);
-  tip.hidden=false;
-  tip.innerHTML=`<strong>${esc(t.label)} · ${exactN(t.views)} views</strong><span>${esc(t.creator)} · ${esc(t.camp)}</span>`;
-  const [W,H]=window.__trendBox||[1000,300];
-  tip.style.left=(t.x/W*100)+'%'; tip.style.top=(t.y/H*100)+'%';
-  tip.classList.toggle('flip', t.x>W*0.7);
-}
 const DK_DEFS={'Published posts':'Posts published within the selected filters','Total views':'Lifetime views on posts published in the selected period (not views gained in it)','Total spend':'Sum of post costs for posts published in the period: creator fees and boost spend','Blended CPV':'Total spend divided by total views, paid and organic','Paid CPV':'Paid spend divided by paid views only'};
-function dashKpi(label,val,sub,ic){
-  return `<div class="ds-card dk-kpi"><div class="dk-kpi-top"><span class="ds-label">${label}</span><span class="dk-info" title="${DK_DEFS[label]||label}">i</span><span class="dk-kpi-tile">${icon(ic,'ico-sm')}</span></div><div class="dk-kpi-val">${val}</div><div class="dk-kpi-sub">${sub}</div></div>`;
-}
 function dashJump(id){ const el=document.getElementById(id); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); }
-const DK_GEAR='<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>';
 const DK_PAL=['#2563eb','#16a34a','#fbbf24','#ef4444','#8b5cf6','#0284c7','#64748b'];
 const DK_ORG='#1e40af', DK_PAID='#0ea5e9';
 const DK_DEF={cperf_spend:'spend',cperf_split:'views'};
@@ -5157,11 +3479,6 @@ function dkApply(key){
   S.dashM={...(S.dashM||{}),[key]:v}; closeLayer(); paintBody();
 }
 const dkEmpty=()=>'<div class="ds-empty">No data for this filter.</div>';
-/* ranked single-line bars: label · bar · value · share */
-function dkHBars(rows,m,kind=''){
-  const d=dkVal(rows,m), tot=d.reduce((s,r)=>s+r.v,0)||1, max=Math.max(1,...d.map(r=>r.v));
-  return `<div class="dk-hbars">${d.map((r,i)=>`<div class="dk-hb${kind?' is-click':''}"${kind?` role="button" tabindex="0" data-name="${esc(r.name)}" onclick="openDimSide('${kind}',this.dataset.name)" onkeydown="if(event.key==='Enter')this.click()"`:''}><span class="dk-hb-l" title="${esc(r.name)}"><i class="dk-sw" style="background:${dkCol(i)}"></i>${esc(r.name)}</span><span class="dk-hb-t"><i style="width:${(r.v/max*100).toFixed(1)}%;background:${dkCol(i)}"></i></span><b>${dkFmt(m,r.v)}</b><small>${(r.v/tot*100).toFixed(0)}% · ${r.posts?r.posts.length:0} posts</small></div>`).join('')||dkEmpty()}</div>`;
-}
 /* two-line rows; 'split' adds the organic / paid stack per row */
 function dkRich(rows,m,mode='',kind=''){
   const d=dkVal(rows,m), tot=d.reduce((s,r)=>s+r.v,0)||1;
@@ -5171,21 +3488,6 @@ function dkRich(rows,m,mode='',kind=''){
     const meta=mode==='split'?`<span>${(org/t*100).toFixed(0)}% organic · ${(paid/t*100).toFixed(0)}% paid</span>`:`<span>${dkPlural(r.posts.length,'post')} · ${rupees(r.spend)}</span>`;
     return `<div class="dk-rr${kind?' is-click':''}"${kind?` role="button" tabindex="0" data-name="${esc(r.name)}" onclick="openDimSide('${kind}',this.dataset.name)" onkeydown="if(event.key==='Enter')this.click()"`:''}><div class="dk-rr-top"><span class="dk-hb-l" title="${esc(r.name)}"><i class="dk-sw" style="background:${dkCol(i)}"></i>${esc(r.name)}</span><b>${dkFmt(m,r.v)}</b><small>${(r.v/tot*100).toFixed(0)}%</small></div>${stack}<div class="dk-rr-meta">${meta}${mode==='split'?`<span>${dkPlural(r.posts.length,'post')} · ${rupees(r.spend)}</span>`:''}</div></div>`;
   }).join('')||dkEmpty()}</div>`;
-}
-/* 100% share bar on top, legend rows below */
-function dkShare(rows,m){
-  const d=dkVal(rows,m);
-  if(!d.some(r=>r.v>0)) return dkEmptyState('No data yet','Location split appears once posts go live.');
-  const tot=d.reduce((s,r)=>s+r.v,0);
-  const bar=d.map((r,i)=>`<i style="width:${(r.v/tot*100).toFixed(1)}%;background:${dkCol(i)}" title="${esc(r.name)}"></i>`).join('');
-  const top=[...d].sort((a,b)=>b.v-a.v)[0];
-  const foot=top?`<div class="dk-foot"><span>${dkPlural(d.length,'state')} tracked</span><span>Top: <b>${esc(top.name)}</b> · ${(top.v/tot*100).toFixed(0)}% of ${m==='spend'?'spend':m==='posts'?'posts':'views'}</span></div>`:'';
-  return `<div class="dk-share"><div class="dk-share-bar">${bar}</div>${dkRich(rows,m)}${foot}</div>`;
-}
-/* columns: value above, label below, colour per category */
-function dkColumns(rows,m){
-  const d=dkVal(rows,m), max=Math.max(1,...d.map(r=>r.v));
-  return `<div class="dk-cbars">${d.map((r,i)=>`<div class="dk-cb"><b>${dkFmt(m,r.v)}</b><div class="dk-cb-t"><i style="height:${Math.max(4,r.v/max*180).toFixed(0)}px;background:${dkCol(i)}"></i></div><span title="${esc(r.name)}">${esc(r.name)}</span><small>${r.posts?new Set(r.posts.map(p=>p.creator)).size:0} creators</small></div>`).join('')||dkEmpty()}</div>`;
 }
 /* donut with colour-coded legend */
 function dkDonut(rows,m){
@@ -5199,7 +3501,6 @@ function dkDonut(rows,m){
 }
 const DK_STATS=[['All','Total campaigns','Campaigns in scope','Unique campaigns in the selected scope. Each campaign is counted once.'],['Active','Running','Lifecycle: active','Campaigns whose lifecycle status is Active as of today. Can overlap with Live now.'],['Live','Live now','Published in last 30 days','Running campaigns with at least one post published in the last 30 days (as of 29 Oct 2026).'],['Completed','Completed','Lifecycle: completed','Campaigns marked completed. Not counted as running.']];
 const daysAgo=d=>Math.round((new Date(TODAY+'T12:00:00')-new Date(d+'T12:00:00'))/864e5);
-const isLiveNow=c=>c.status==='Active'&&c.posts.some(p=>{const d=daysAgo(p.date);return d>=0&&d<=30;});
 function dashScopeCamps(){ const f=dashState(); return CAMP_LIST.filter(c=>(inCamp(f,c.id))&&(f.category==='All'||c.category===f.category)&&dashCampOK(c,f)&&(!f.product||f.product==='All'||c.posts.some(p=>p.product===f.product))); }
 const dashProducts=()=>uniq(CAMP_LIST.flatMap(c=>c.posts.map(p=>p.product)));
 const DK_SVG=d=>`<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
@@ -5236,27 +3537,6 @@ function ovSpark(vals,color){
   return `<svg class="ov-spk" viewBox="0 0 ${w} ${h}" aria-hidden="true"><path d="${line}L${w} ${h}L0 ${h}Z" fill="${color}" opacity=".12"/><path d="${line}" fill="none" stroke="${color}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/><circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="2.4" fill="${color}"/></svg>`;
 }
 
-function dashCampTableHTML(){
-  const f=dashState(), st=f.cstat||'All', so=f.csort||'All';
-  const byC={}; dashPosts().forEach(p=>{(byC[p.campaignId]=byC[p.campaignId]||[]).push(p);});
-  const tq=(S.dashTableQ||'').toLowerCase().trim();
-  let rows=dashScopeCamps().filter(c=>!tq||c.name.toLowerCase().includes(tq)).filter(c=>st==='All'||(st==='Active'?c.status==='Active':st==='Live'?isLiveNow(c):c.status!=='Active')).map(c=>{
-    const ps=byC[c.id]||[], v=sumOf(ps,'views'), sp=sumOf(ps,'cost'), pv=sumOf(ps,'paid'), psp=ps.filter(p=>p.paid>0).reduce((a,p)=>a+p.cost,0);
-    return {c,n:ps.length,v,sp,cpv:v?sp/v:Infinity,pcpv:pv?psp/pv:null,last:ps.map(p=>p.date).sort().pop()||''};
-  });
-  const key={views:(a,b)=>b.v-a.v,spend:(a,b)=>b.sp-a.sp,posts:(a,b)=>b.n-a.n,cpv:(a,b)=>a.cpv-b.cpv}[so]||((a,b)=>b.v-a.v);
-  rows.sort(key);
-  const port=(()=>{const a=rows.reduce((t,x)=>t+x.sp,0), b=rows.reduce((t,x)=>t+x.v,0);return b?a/b:0;})();
-  const topIds=[...rows].filter(x=>x.v&&x.cpv<=port).slice(0,3).map(x=>x.c.id);
-  const flagOf=x=>!x.n?'':topIds.includes(x.c.id)?'<span class="dk-flag dk-flag--good">Top performer</span>':(x.v&&x.cpv>2*port)?'<span class="dk-flag dk-flag--bad">High spend, low views</span>':'';
-  const stLabel=c=>!c.posts.length?'<span class="life"><i></i>No posts yet</span>':isLiveNow(c)?'<span class="life life--live"><i></i>Live</span>':c.status==='Active'?'<span class="life life--live"><i></i>Running</span>':'<span class="life life--done"><i></i>Completed</span>';
-  const tbody=rows.map(x=>`<tr><td><button class="ds-namebtn" onclick="openCampaign('${x.c.id}')">${esc(x.c.name)}</button>${flagOf(x)?`<div class="dk-flag-row">${flagOf(x)}</div>`:''}</td><td>${esc(x.c.category)}</td><td>${stLabel(x.c)}</td><td class="ds-num">${x.c.creatorIds.length}</td><td class="ds-num">${x.n}</td><td class="ds-num">${exactN(x.v)}</td><td class="ds-num">${rupees(x.sp)}</td><td class="ds-num">${x.v?cpvOf(x.sp,x.v):'—'}</td><td class="ds-num">${x.pcpv==null?'—':'₹'+x.pcpv.toFixed(2)}</td><td class="dk-nw">${x.last?campDate(x.last):'—'}</td></tr>`).join('')||'<tr><td colspan="9" class="ds-empty">No campaigns match this status in the selected scope.</td></tr>';
-  return `<div class="ds-card dk-w dk-camps" id="dash-campaigns">
-    <div class="dk-wh"><div class="dk-wt"><span class="ds-section-title">Campaign comparison</span><span class="dk-wsub">${rows.length} of ${dashScopeCamps().length} campaigns · views and spend for the selected period</span></div></div>
-    <div class="ds-toolbar ds-toolbar--wrap dk-ptools">${campSearchBox('dashTableQ','Search campaign')}${dsFilterD('csort','Sort campaigns',[['All','Most views'],['spend','Most spend'],['posts','Most posts'],['cpv','Lowest blended CPV']],so)}</div>
-    <div class="ds-table-wrap dk-scroll dk-scroll-camps"><table class="ds-table ds-table--fit ds-table--dense"><thead><tr><th>Campaign</th><th>Category</th><th>Status</th><th class="ds-num">Creators</th><th class="ds-num">Posts</th><th class="ds-num">Views</th><th class="ds-num">Spend</th><th class="ds-num">Blended CPV</th><th class="ds-num">Paid CPV</th><th>Last post</th></tr></thead><tbody>${tbody}</tbody></table></div>
-  </div>`;
-}
 const inCamp=(f,id)=>f.campaign==='All'||f.campaign.split(',').includes(id);
 function dashCampFilterHTML(){
   const f=dashState(), sel=f.campaign==='All'?[]:f.campaign.split(','), q=(S.dashCampQ||'').toLowerCase().trim();
@@ -5264,12 +3544,6 @@ function dashCampFilterHTML(){
   return `<details class="dk-cf" ${S.dashCampOpen?'open':''} ontoggle="S.dashCampOpen=this.open"><summary class="ds-btn ds-btn--outline ds-btn--sm dk-cf-btn${sel.length?' is-on':''}">Campaign${sel.length?` <b class="ds-count">${sel.length}</b>`:''}<span class="dk-cf-chev" aria-hidden="true">${DK_SVG('<path d="M6 9l6 6 6-6"/>')}</span></summary><div class="dk-cf-panel">${campSearchBox('dashCampQ','Search campaigns')}<div class="dk-cf-list">${opts.map(c=>`<label class="dk-cf-item"><input type="checkbox" ${sel.includes(c.id)?'checked':''} onchange="dashToggleCamp('${c.id}')"><span>${esc(c.name)}</span></label>`).join('')||'<span class="ds-caption">No campaigns match</span>'}</div><div class="dk-cf-foot"><button type="button" class="ds-btn ds-btn--ghost ds-btn--sm" onclick="setDash('campaign','All')">All campaigns</button></div></div></details>`;
 }
 function dashToggleCamp(id){ const f=dashState(); let sel=f.campaign==='All'?[]:f.campaign.split(','); sel=sel.includes(id)?sel.filter(x=>x!==id):[...sel,id]; setDash('campaign',sel.length?sel.join(','):'All'); }
-function dashChipsHTML(){
-  const f=dashState(), out=[];
-  if(f.campaign!=='All') f.campaign.split(',').forEach(id=>{const c=CAMP_LIST.find(x=>x.id===id); if(c) out.push(`<button type="button" class="tv-chip is-on" onclick="dashToggleCamp('${id}')">${esc(c.name)} ✕</button>`);});
-  if(f.day) out.push(`<button type="button" class="tv-chip is-on" onclick="setDash('day','')">${esc(f.day.length===7?tlMonLong(f.day):campDate(f.day))} ✕</button>`);
-  return out.length?`<div class="dk-chips">${out.join('')}</div>`:'';
-}
 function tvPick(el){ const wrap=el.closest('.tv-chart'); const rows=JSON.parse(wrap.dataset.rows||'[]'), x=rows[+el.dataset.i]; if(!x||!x.key) return; dayActivity(x); }
 function dayActivity(x){
   const ps=dashPosts().filter(p=>p.date===x.key).sort((p,q)=>q.views-p.views);
@@ -5382,25 +3656,6 @@ function dashTrendHTML(posts,f0,key='trend'){
     </div>
   </div>${side}</section>`;
 }
-function refreshDash(){ S.lastSync=new Date(); paintBody(); toast('Dashboard refreshed · demo'); }
-function lastUpdated(){ const d=S.lastSync||(S.lastSync=new Date()); return d.toLocaleTimeString('en-IN',{hour:'numeric',minute:'2-digit'}); }
-function organicHTML(posts){
-  const org=sumOf(posts,'organic'), paid=sumOf(posts,'paid'), tot=(org+paid)||1;
-  const op=(org/tot*100).toFixed(1), pp=(paid/tot*100).toFixed(1), RING=2*Math.PI*46, oa=(org/tot*RING).toFixed(2), pa=(paid/tot*RING).toFixed(2);
-  const bp=posts.filter(p=>p.paid>0), bSpend=sumOf(bp,'cost');
-  return `<section class="ds-card dk-org">
-    <div class="dk-wh"><div class="dk-wt"><span class="ds-section-title">Organic vs. boosted</span><span class="dk-wsub">Share of views</span></div></div>
-    <div class="dk-org-body">
-      <div class="dk-donut-wrap"><svg viewBox="0 0 120 120" class="dk-donut" role="img" aria-label="Organic ${op}%, boosted ${pp}%"><circle cx="60" cy="60" r="46" fill="none" stroke="#eff6ff" stroke-width="16"/><circle cx="60" cy="60" r="46" fill="none" stroke="${DK_ORG}" stroke-width="16" stroke-dasharray="${oa} ${RING}" transform="rotate(-90 60 60)"/><circle cx="60" cy="60" r="46" fill="none" stroke="${DK_PAID}" stroke-width="16" stroke-dasharray="${pa} ${RING}" stroke-dashoffset="${-oa}" transform="rotate(-90 60 60)"/></svg><div class="dk-donut-c"><b>${op}%</b><span>organic</span></div></div>
-      <table class="dk-org-table"><thead><tr><th></th><th class="ds-num">Views</th><th class="ds-num">Share</th></tr></thead><tbody>
-        <tr><td><i class="dk-sw" style="background:${DK_ORG}"></i>Organic</td><td class="ds-num">${exactN(org)}</td><td class="ds-num">${op}%</td></tr>
-        <tr><td><i class="dk-sw" style="background:${DK_PAID}"></i>Boosted</td><td class="ds-num">${exactN(paid)}</td><td class="ds-num">${pp}%</td></tr>
-        <tr class="dk-org-total"><td>Total</td><td class="ds-num">${exactN(org+paid)}</td><td class="ds-num">100%</td></tr></tbody></table>
-    </div>
-    <div class="dk-org-foot"><span>Boosted posts <b>${bp.length}</b> of ${posts.length}</span><span>Cost on boosted posts <b>${rupees(bSpend)}</b></span></div>
-    <span class="ds-caption">Attribution comes from post data. Cost includes creator fees, which are not split from boost spend.</span>
-  </section>`;
-}
 function cwCountry(id){ const c=crOf(id)||{}; if(c.country&&c.country!=='—') return c.country; return (DISC_META[id]||{}).country||'Unknown'; }
 function cwState(id){ return crAttr(id,'state')||'Unknown'; }
 function dkSetM(k,v){ S.dashM={...(S.dashM||{}),[k]:v}; paintBody(); }
@@ -5490,12 +3745,6 @@ function dashboardHTML(){
   return `<div class="ds-page">
     <div class="ds-head"><div><h1 class="ds-page-title">${head[0]}</h1><p class="ds-page-desc">${head[1]}</p></div></div>
     ${t==='tracker'?'':tabs}
-    ${allCampaignsHTML(true)}
-  </div>`;
-}
-function trackerHTML(){
-  return `<div class="ds-page">
-    <div class="ds-head"><div><h1 class="ds-page-title">Campaign tracker</h1><p class="ds-page-desc">Every campaign with its live analytics in one table. Select a campaign name to open its detail view.</p></div></div>
     ${allCampaignsHTML(true)}
   </div>`;
 }
@@ -5629,7 +3878,6 @@ function openDimSide(kind,name,tab='details'){
   openDrawer(esc(name),`${kind==='concept'?'Creative concept':'Product'} · ${ps.length} post${ps.length===1?'':'s'}`,tabs+body);
   const d=document.querySelector('#layer .ds-drawer'); if(d) d.classList.add('ds-drawer--side');
 }
-function resetDash(){ S.dash={...dashState(),campaign:'All',category:'All',product:'All',gender:'All',state:'All',tier:'All',concept:'All',cstat:'All',day:''}; paintBody(); }
 /* Individual export: one campaign's live and lined-up posts as CSV */
 function exportCampaign(id){
   const c=campOf(id); if(!c) return;
@@ -5653,7 +3901,6 @@ function exportDashboard(){
   toast(`Successfully exported ${rows.length} post${rows.length===1?'':'s'} from ${camps.size} campaign${camps.size===1?'':'s'}`);
 }
 let CAMP_SORT='latest';
-const campSq=ids=>`<div class="campl-sq">${ids.slice(0,3).map(id=>`<span class="dk-sq" style="background:${AV_PAL[avHash(id)%AV_PAL.length]}" title="${esc(cNameOf(id))}">${esc(initialsOf(cNameOf(id)))}</span>`).join('')}${ids.length>3?`<span class="dk-sq dk-sq--more">+${ids.length-3}</span>`:''}</div>`;
 /* ── Phase 1 analytics: overall timeline, campaign pipeline, creator campaign history ── */
 const tlMonLabel=m=>new Date(m+'-01T12:00:00').toLocaleDateString('en-US',{month:'short',year:'numeric'});
 const tlMonLong=m=>new Date(m+'-01T12:00:00').toLocaleDateString('en-US',{month:'long',year:'numeric'});
@@ -5664,7 +3911,6 @@ const PERIOD_OPTS=[['thisMonth','This month'],['lastMonth','Last month'],['last3
 function monthEnd(m){ const [y,mo]=m.split('-').map(Number); return new Date(Date.UTC(y,mo,0)).getUTCDate(); }
 function shiftMonth(m,d){ const [y,mo]=m.split('-').map(Number); return new Date(Date.UTC(y,mo-1+d,1)).toISOString().slice(0,7); }
 function monthsBetween(a,b){ const out=[]; let [y,m]=a.split('-').map(Number); const [y2,m2]=b.split('-').map(Number); while(y<y2||(y===y2&&m<=m2)){ out.push(`${y}-${pad2(m)}`); if(++m>12){m=1;y++;} } return out; }
-function fmtDay(d){ return new Date(d+'T12:00:00Z').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'}); }
 function rangeOf(v,cust){
   const cur=TODAY.slice(0,7), y=Number(TODAY.slice(0,4));
   const mr=m=>({from:m+'-01',to:`${m}-${pad2(monthEnd(m))}`});
@@ -5677,10 +3923,7 @@ function rangeOf(v,cust){
   if(v==='custom'){ const back=new Date(Date.parse(TODAY+'T00:00:00Z')-29*864e5).toISOString().slice(0,10); const from=(cust&&cust.from)||back, to=(cust&&cust.to)||TODAY; return from<=to?{from,to}:{from:to,to:from}; }
   return null;
 }
-function periodWindow(v,cust){ const r=rangeOf(v,cust); return r?`${fmtDay(r.from)} – ${fmtDay(r.to)}`:'Every post since the first campaign'; }
 function periodMonthsOf(camps){ return uniq([...tlAll(camps).map(p=>p.date.slice(0,7)),TODAY.slice(0,7)]).reverse(); }
-const dashPeriodOpts=()=>PERIOD_OPTS;
-const campPeriodOpts=()=>PERIOD_OPTS;
 function tlSummary(ps){
   const boosted=ps.filter(p=>p.paid>0);
   return {n:ps.length,views:sumOf(ps,'views'),nBoost:boosted.length,nOrg:ps.length-boosted.length,bViews:sumOf(ps,'paid'),oViews:sumOf(ps,'organic'),camps:new Set(ps.map(p=>p.campaignId)).size};
@@ -5768,12 +4011,6 @@ function campPipeHTML(c){
     <p class="ds-caption">${pct?`Spend is ${Math.round(pct)}% of the ${rupees(bd)} budget.`:'No budget set.'}</p>
   </section>`;
 }
-function creatorCampHistoryHTML(c){
-  const rows=CAMP_LIST.filter(x=>(x.creatorIds||[]).includes(c.id)).map(x=>{const ps=x.posts.filter(p=>p.creator===c.id);return {x,ps,views:sumOf(ps,'views'),cost:sumOf(ps,'cost')};}).sort((a,b)=>b.x.created.localeCompare(a.x.created));
-  return `<section class="cq-sec"><div class="cq-sec-head"><h4>Campaign history</h4><span class="cq-summary">${rows.length} campaign${rows.length===1?'':'s'}</span></div>
-    ${rows.length?`<div class="cq-hist">${rows.map(r=>`<div class="cq-hist-row"><div><b>${esc(r.x.name)}</b><span>${esc(r.x.product)} · ${r.x.status==='Active'?'Live':'Completed'}</span></div><span>${r.ps.length} post${r.ps.length===1?'':'s'}</span><span>${fmt(r.views)} views</span><span>${rupees(r.cost)}</span></div>`).join('')}</div>`:'<p class="ds-caption cq-empty">Not part of any campaign yet.</p>'}
-  </section>`;
-}
 function campPager(total,pg,pages,per,key='campPage'){
   const from=total?(pg-1)*per+1:0, to=Math.min(total,pg*per), nums=[];
   for(let k=1;k<=pages;k++){ if(k===1||k===pages||Math.abs(k-pg)<=1) nums.push(k); else if(nums[nums.length-1]!=='…') nums.push('…'); }
@@ -5844,8 +4081,6 @@ const AC_PRESETS=[
 const acDims=()=>S.acSlots||AC_DEF_SLOTS;
 const acSel=i=>(S.acSelS&&S.acSelS[i])||[];
 function acSetSel(i,arr){ S.acSelS=[0,1,2,3].map(j=>j===i?arr:acSel(j)); }
-function acSetCust(k,v){ S.acCust={...(S.acCust||{}),[k]:v}; paintBody(); }
-const acPeriodOpts=()=>PERIOD_OPTS.filter(x=>x[0]!=='custom');
 function acPersist(){ try{ localStorage.setItem('adam_ac_v1',JSON.stringify({custom:S.acCustom||[],vals:S.acCustVals||{},views:S.acSaved||[],plans:S.acPlans||{}})); }catch(e){} }
 (function acLoad(){ try{ const s=JSON.parse(localStorage.getItem('adam_ac_v1')||'null'); if(s){ S.acCustom=s.custom||[]; S.acCustVals=s.vals||{}; S.acSaved=s.views||[]; S.acPlans=s.plans||{}; } }catch(e){} })();
 let lastTops=[], lastFlat=[];
@@ -6013,8 +4248,6 @@ function acVsCell(x,k){
   const v=acVs(x,k); if(v==null) return AC_DASH;
   return acSim(`<span class="${v>=0?'ac-up':'ac-down'}">${v>=0?'+':''}${v.toFixed(0)}%</span>`);
 }
-/* short vertical labels for collapsed sections */
-const AC_SHORT={identity:'Identity',planned:'Planned',publishing:'Publishing',organic:'Organic',vsPlan:'vs Plan',paid:'Paid',combined:'Combined',custom:'Custom'};
 /* ── column registry: C(key,label,on,num,val,cell); val(x) gives a number for sort/formulas, cell(x) gives HTML ── */
 const acC=(k,l,on,num,val,cell)=>({k,l,on,num,val,cell});
 const acMuted=t=>`<span class="ac-muted">${t}</span>`;
@@ -6289,13 +4522,6 @@ function acEdSave(key,v){
   S.acEdit=null; paintBody();
 }
 function acCollapseAll(){ S.acExp={}; paintBody(); }
-/* ── names ── */
-/* first column is always Campaign: campaign rows show the campaign; deeper rows show the campaign(s) they belong to, with the level item beneath */
-function acCampLbl(r){
-  const m=new Map(); r.atoms.forEach(a=>{ if(a.c&&!m.has(a.c.id)) m.set(a.c.id,a.c.name); });
-  const names=[...m.values()];
-  return names.length===1?esc(names[0]):`${names.length} campaigns`;
-}
 /* level tag: names what this row is, so the first column reads the same at every level */
 function acLvlTag(r){ if(!r.depth) return ''; const L={creator:'Creator',post:'Post',ad:'Ad'}[r.kind]||''; return L?`<span class="ac-lvl">${L}</span>`:''; }
 function acNameHTML(r,x){
@@ -6597,8 +4823,8 @@ function acPaidHTML(){
     <div class="ac-form">
       <label class="ac-fld">Budget per post (₹)<input id="acPBud" class="ac-input" type="number" value="25000" min="1000" step="1000"></label>
       <label class="ac-fld">Objective<select id="acPObj" class="ac-input">${['Video views','Reach','Engagement','Traffic','Sales'].map(o=>`<option>${o}</option>`).join('')}</select></label>
-      <label class="ac-fld">Planned start<input id="acPStart" class="ac-input" type="date" value="${crmDue(2)}"></label>
-      <label class="ac-fld">Planned end<input id="acPEnd" class="ac-input" type="date" value="${crmDue(16)}"></label></div>`,
+      <label class="ac-fld">Planned start<input id="acPStart" class="ac-input" type="date" value="${dateInDays(2)}"></label>
+      <label class="ac-fld">Planned end<input id="acPEnd" class="ac-input" type="date" value="${dateInDays(16)}"></label></div>`,
     `<button type="button" class="ac-btn" onclick="S.acPaidOpen=false;paintBody()">Cancel</button><button type="button" class="ac-btn ac-btn--primary" ${n?'':'disabled'} onclick="acCreatePlans()">Create paid plan</button>`,'acPaidOpen');
 }
 function acCreatePlans(){
@@ -6621,23 +4847,6 @@ function acExportCSV(){
   a.href=url; a.download='all-campaigns.csv'; document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),1000); toast('CSV exported');
 }
-
-/* ── campaign list inside the table card: selects level-1 rows (not a left-nav item) ── */
-function acCampListHTML(){
-  const sel=acSel(0), all=!sel.length;
-  const dot=c=>c.status==='Active'?'live':c.status==='Completed'?'done':'draft';
-  return `<aside class="ac-camps" aria-label="Your campaigns">
-    <div class="ac-camps-h"><span>Your campaigns</span><button type="button" class="ac-camps-add" aria-label="New campaign" title="New campaign" onclick="openCampaignForm('new')">+</button></div>
-    <button type="button" class="ac-camp-row${all?' on':''}" aria-pressed="${all}" onclick="acCampClear()"><span class="ac-camp-dot all"></span><span class="ac-camp-n">All campaigns</span><small>${CAMP_LIST.length}</small></button>
-    <div class="ac-camps-list">${CAMP_LIST.map(c=>{ const on=sel.includes(c.id);
-      return `<button type="button" class="ac-camp-row${on?' on':''}" aria-pressed="${on}" title="${esc(c.name)}" onclick="acCampToggle('${c.id}')"><span class="ac-camp-dot ${dot(c)}"></span><span class="ac-camp-n">${esc(c.name)}</span></button>`; }).join('')}</div>
-  </aside>`;
-}
-function acCampToggle(id){
-  const cur=new Set(acSel(0)); cur.has(id)?cur.delete(id):cur.add(id);
-  acSetSel(0,[...cur]); for(let j=1;j<4;j++) acSetSel(j,[]); S.acExp={}; paintBody();
-}
-function acCampClear(){ acSetSel(0,[]); for(let j=1;j<4;j++) acSetSel(j,[]); S.acExp={}; paintBody(); }
 
 const CAMP_COLS=[['product','Product','',0],['manager','Campaign manager','',0],['creators','Creators','',0],['progress','Progress','',0],['views','Total views','',1],['spend','Spend vs budget','',0],['cpv','Avg CPV','',1],['health','Health','',0],['start','Start date','',0],['end','End date','',0]];
 const campColOn=k=>(S.campCols||{})[k]!==false;
@@ -6803,7 +5012,6 @@ function campExport(){
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([lines.join('\n')],{type:'text/csv'})); a.download=`campaign-export-${TODAY}.csv`; a.click(); URL.revokeObjectURL(a.href);
   toast(`Exported ${sel.length} campaign${sel.length===1?'':'s'} and ${rows.length} post${rows.length===1?'':'s'}`);
 }
-function dsSeg2(k,opts,val){ return `<div class="ds-tabs" role="tablist">${opts.map(([v,l,n])=>`<button type="button" role="tab" aria-selected="${val===v}" class="${val===v?'on':''}" onclick="setPageState('${k}','${v}')">${l}<span class="ds-count">${n}</span></button>`).join('')}</div>`; }
 
 /* ════════ PLAN DETAIL · CAMPAIGN DETAIL · SETTINGS · DIALOGS (ported from uploaded prototype) ════════ */
 const TODAY='2026-10-29';
@@ -6818,15 +5026,11 @@ CAMP_LIST.forEach(c=>c.posts.forEach((p,i)=>{ if(p.url&&i%5===1) p.url='https://
 const fitOf=i=>[67,33,82,70][i%4];
 const contentFitOf=i=>[50,38,87][i%3];
 const CONCEPTS=['How-to','Before/After','Review','Gifting','Unboxing','Routine'];
-const PRODUCTS=['Plix Glow Serum','Plix Face Wash','Plix Festive Kit'];
 const dsPerson=(c,fn)=>{ if(!c) return '—'; const nb=fn?`<button class="ds-namebtn" onclick="${fn}('${c.id}')">${esc(c.name)}</button>`:`<span class="ds-table-title">${esc(c.name)}</span>`; return `<div class="ds-person">${dsAv(c.id,c.name)}<div class="ds-person-text"><span class="ds-table-title">${nb}</span><span class="ds-table-meta">${esc(c.handle)}</span></div></div>`; };
-function goCreator(id){ S.page='creators'; S.myCreator=id; S.tab=0; S.menu=null; paintHeader(); paintBody(true); window.scrollTo(0,0); }
 function openPlan(id){ S.planId=id; S.plSel=[]; S.plCmpOnly=null; S.plNoteEdit=null; S.pTab='overview'; S.plStatus='All'; S.page='plan'; S.discCreator=null; S.myCreator=null; paintHeader(); paintBody(true); window.scrollTo(0,0); }
 function openCampaign(id){ if(S.page!=='campaign')S.campReturn={page:S.page,myCreator:S.myCreator||null,discCreator:S.discCreator||null}; S.campId=id; S.cTab='performance'; S.page='campaign'; S.discCreator=null; S.myCreator=null; paintHeader(); paintBody(true); window.scrollTo(0,0); }
-function crumbDS(root,rootPage,name){ return `<nav class="ds-crumb" aria-label="Breadcrumb"><button class="ds-link" onclick="setPage('${rootPage}')">${root}</button><span>/</span><span>${esc(name)}</span></nav>`; }
 function notFoundDS(){ return `<div class="ds-page"><div class="ds-card ds-pad"><span class="ds-section-title">Not found</span><p class="ds-caption">The record is unavailable.</p></div></div>`; }
 function bars(items){ const mx=Math.max(1,...items.map(i=>i.value)); return `<div class="ds-bars">${items.map(i=>`<div class="ds-bar-col" title="${esc(i.label)}: ${exactN(i.value)}"><div class="ds-bar-fill" style="height:${Math.max(2,i.value/mx*100)}%"></div><span>${esc(i.label)}</span></div>`).join('')}</div>`; }
-function splitHTML(org,paid){ const t=(org+paid)||1; return `<div class="ds-split"><i style="width:${org/t*100}%"></i><b style="width:${paid/t*100}%"></b></div><div class="ds-legend"><span><i class="ds-dot ds-dot--navy"></i>Organic ${fmt(org)}</span><span><i class="ds-dot ds-dot--blue"></i>Boosted ${fmt(paid)}</span></div>`; }
 const boostBadge=p=>p.paid>0?dsBadge('Boosted','outline'):dsBadge('Organic','success');
 
 /* ---------- Plan detail ---------- */
@@ -6836,12 +5040,6 @@ const planGoalW=k=>{const g=PL_GOALS.find(x=>x.k===k);return g?`${g.w} / ${100-g
 const planRv=(l,v)=>`<div class="pl-rv"><dt>${l}</dt><dd>${v}</dd></div>`;
 const planChips=arr=>arr&&arr.length?arr.map(x=>`<span class="pl-rv-chip">${esc(x)}</span>`).join(''):'<span class="pl-rv-none">Not set</span>';
 const planTxt=v=>(v===undefined||v===null||String(v).trim()==='')?'<span class="pl-rv-none">Not set</span>':esc(String(v));
-function planBriefStripHTML(p){
-  const st=(l,v)=>`<div><dt>${l}</dt><dd>${v}</dd></div>`;
-  return `<section class="pl-strip" aria-label="Brief summary"><div class="pl-strip-top"><div class="pl-strip-tags">${[p.objective,...planProds(p),p.format].filter(Boolean).map(x=>dsBadge(x)).join('')}</div>
-    <button class="ds-btn ds-btn--outline ds-btn--sm" onclick="setPageState('pTab','brief')">View brief</button></div>
-    <dl class="pl-strip-stats">${st('Creators',p.creators.length)}${st('Ages',planAges(p).join(', ')||'Any')}${st('Budget',rupees(p.budget))}${st('Target views',p.targetViews?exactN(p.targetViews):'Not set')}</dl></section>`;
-}
 function planReportHTML(p){
   const a=p.audience||{}, c=p.content||{}, cm=p.compare||{};
   const prods=planProds(p), ages=planAges(p), n=p.creators.length;
@@ -6910,35 +5108,6 @@ if(!window.__plRowMenuBound){
   window.__plRowMenuBound=true;
   document.addEventListener('click',e=>{ if(S.plRowMenu&&!e.target.closest('[data-rowmenu]')){ S.plRowMenu=null; paintBody(); } });
 }
-/* compare membership: add or remove a creator from the Compare tab, controlled from the All creators list */
-function plCmpToggle(pid,cid){ const p=planOf(pid); if(!p) return; const out=new Set(p.cmpOut||[]); if(out.has(cid)) out.delete(cid); else out.add(cid); p.cmpOut=[...out]; paintBody(); }
-function plCmpBtn(p,c){
-  const inCmp=!(p.cmpOut||[]).includes(c.id);
-  return `<button type="button" class="ds-btn ds-btn--outline ds-btn--sm pl-cmp-btn" aria-pressed="${inCmp}" aria-label="${inCmp?'Remove':'Add'} ${esc(c.name)} ${inCmp?'from':'to'} compare" onclick="event.stopPropagation();plCmpToggle('${p.id}','${c.id}')">${inCmp?'−':'+'} Compare</button>`;
-}
-/* compare: order, add at a position, remove, with the picker in a dialog so the scrolling table never clips it */
-function plCmpOrder(p){ const base=p.creators||[]; const ord=(p.cmpOrder||[]).filter(id=>base.includes(id)); base.forEach(id=>{ if(!ord.includes(id)) ord.push(id); }); return ord; }
-function plCmpRemove(pid,cid){ const p=planOf(pid); if(!p) return; p.cmpOut=[...new Set([...(p.cmpOut||[]),cid])]; paintBody(); }
-function plCmpAdd(pid,cid,before){
-  const p=planOf(pid); if(!p) return;
-  p.cmpOut=(p.cmpOut||[]).filter(x=>x!==cid);
-  const order=plCmpOrder(p).filter(x=>x!==cid);
-  let idx=before==='_end'?order.length:order.indexOf(before); if(idx<0) idx=order.length;
-  order.splice(idx,0,cid); p.cmpOrder=order;
-  closeLayer(); paintBody();
-}
-function plCmpPick(pid,before){
-  const p=planOf(pid); if(!p) return;
-  const outs=(p.creators||[]).map(crOf).filter(x=>x&&(p.cmpOut||[]).includes(x.id));
-  const body=outs.length
-    ?`<div class="pl-cmp-pick">${outs.map(x=>`<button type="button" class="pl-cmp-pick-b" onclick="plCmpAdd('${pid}','${x.id}','${before}')">${dsAv(x.id,x.name)}<span><b>${esc(x.name)}</b><small>${esc(x.handle)}</small></span></button>`).join('')}</div>`
-    :'<p class="ds-caption">Everyone in this list is already in Compare.</p>';
-  dlg('Add to compare','Pick a creator to place in this spot.',body,'<button class="ds-btn ds-btn--outline" onclick="closeLayer()">Cancel</button>');
-}
-function plCmpHead(p,c,isLast){
-  const addBtn=(b,cls)=>`<button type="button" class="pl-cmp-add ${cls}" aria-label="Add a creator here" title="Add a creator here" onclick="event.stopPropagation();plCmpPick('${p.id}','${b}')">+</button>`;
-  return `<th class="pl-cmp-col">${addBtn(c.id,'pl-cmp-add-l')}<div class="pl-cmp-h">${dsAv(c.id,c.name)}<span><b>${esc(c.name)}</b><small>${esc(c.handle)}</small></span></div><button type="button" class="pl-cmp-rm" aria-label="Remove ${esc(c.name)} from compare" onclick="event.stopPropagation();plCmpRemove('${p.id}','${c.id}')">Remove</button>${isLast?addBtn('_end','pl-cmp-add-r'):''}</th>`;
-}
 function planDetailHTML(){
   const p=planOf(S.planId); if(!p) return notFoundDS();
   const tab=S.pTab||'overview', q=(S.pQ||'').toLowerCase().trim();
@@ -6985,52 +5154,6 @@ function plSelAll(on,csv){ const s=new Set(S.plSel||[]); csv.split(',').filter(B
 function plSelClear(){ S.plSel=[]; paintBody(); }
 function setPlStatus(v){ S.plStatus=v; paintBody(); }
 function plBulkScore(){ const n=(S.plSel||[]).length; toast(`Scoring ${n} creator${n===1?'':'s'} against the brief · demo`); }
-function plCmpClear(){ S.plCmpOnly=null; paintBody(); }
-/* ── Plan compare (modal) and Expected outcome tab ── */
-const OC_CSS=`<style>.oc{display:flex;flex-direction:column;gap:20px;color:#0f172a}
-.oc-banner{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;font-size:13px;color:#1e40af}
-.oc-banner b{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#1d4ed8;font-weight:700}
-.oc-strip{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;background:#ffffff}
-.oc-kpi{padding:16px 18px;border-left:1px solid #e2e8f0;min-width:0}
-.oc-kpi:first-child{border-left:0}
-.oc-kpi .k{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#1e40af}
-.oc-kpi .v{font-size:24px;font-weight:700;letter-spacing:-.01em;margin-top:6px;color:#0f172a;line-height:1.2}
-.oc-kpi .v small{font-size:13px;font-weight:500;color:#1e40af;margin-left:4px;letter-spacing:0}
-.oc-kpi .s{font-size:13px;color:#1e40af;margin-top:4px;line-height:1.45}
-.oc-bar{height:6px;border-radius:16px;background:#eff6ff;margin-top:10px;overflow:hidden}
-.oc-bar i{display:block;height:100%;background:#1d4ed8;border-radius:16px}
-.oc-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
-.oc-card{border:1px solid #e2e8f0;border-radius:12px;padding:18px;background:#ffffff;min-width:0}
-.oc-card h3{margin:0;font-size:14px;font-weight:700;color:#0f172a}
-.oc-card>p{margin:2px 0 12px;font-size:13px;color:#1e40af}
-.oc-row{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid #f1f5f9;font-size:14px}
-.oc-row:first-of-type{border-top:0}
-.oc-row span{color:#1e40af}
-.oc-row b{font-weight:600;text-align:right;color:#0f172a}
-.oc-city{display:grid;grid-template-columns:96px minmax(0,1fr) 92px;gap:12px;align-items:center;padding:8px 0;font-size:14px;color:#0f172a}
-.oc-city .bar{height:8px;border-radius:16px;background:#eff6ff;overflow:hidden}
-.oc-city .bar i{display:block;height:100%;background:#1d4ed8;border-radius:16px}
-.oc-city .n{text-align:right;line-height:1.2}
-.oc-city .n b{display:block;font-weight:700}
-.oc-city .n small{font-size:12px;color:#1e40af}
-.oc-sec{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
-.oc-sec h3{margin:0;font-size:14px;font-weight:700}
-.oc-sec span{font-size:13px;color:#1e40af}
-@media(max-width:900px){.oc-strip{grid-template-columns:repeat(2,minmax(0,1fr))}.oc-grid{grid-template-columns:minmax(0,1fr)}}
-</style>`;
-function planAddDays(iso,n){ const d=new Date(iso+'T12:00:00Z'); d.setUTCDate(d.getUTCDate()+n); return d.toISOString().slice(0,10); }
-function planDateLabel(iso){ return new Date(iso+'T12:00:00Z').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'}); }
-/* Aggregates for a set of creators in a plan (expected = simulated from avg views and engagement) */
-function planAgg(p,list){
-  const n=list.length, cost=list.reduce((s,c)=>s+plCost(p,c.id),0), views=list.reduce((s,c)=>s+(c.views||0),0);
-  const er=n?list.reduce((s,c)=>s+(mxOf(c.id).engagement||0),0)/n:0;
-  const fit=n?list.reduce((s,c,i)=>s+fitOf(i),0)/n:0;
-  const auths=list.map(c=>mx(c).auth).filter(v=>v!=null);
-  const auth=auths.length?auths.reduce((s,v)=>s+v,0)/auths.length:null;
-  const est=list.filter(c=>p.costs&&p.costs[c.id]!=null).length;
-  const tiers=['Nano','Micro','Macro','Mega'].map(t=>[t,list.filter(c=>c.tier===t).length]).filter(x=>x[1]>0).map(x=>x[0]+' '+x[1]).join(' · ')||'—';
-  return {n,cost,views,cpv:views?cost/views:0,er,fit:Math.round(fit),auth:auth==null?'—':Math.round(auth),est,tiers};
-}
 /* Shared metric table: used by the compare modal */
 function planCmpTableHTML(p,list){
   const isShort=id=>(p.shortlisted||[]).includes(id);
@@ -7110,7 +5233,6 @@ const ccsRd=v=>Math.round(v/100)*100;
 const ccsMed=a=>{ if(!a.length) return null; const x=[...a].sort((p,q)=>p-q), m=x.length>>1; return x.length%2?x[m]:(x[m-1]+x[m])/2; };
 const ccsDef=()=>({deliv:'reel',units:1,long:false,prod:0,months:1,amp:false,format:'Single image',seq:'',useHist:true,histManual:'',looks:null,cpv:'',views:'',cpc:'',clicks:''});
 const ccsEng=c=>{const m=mxOf(c.id); return m.engagement>0?m.engagement:(c.views?c.likes/c.views*100:0);};
-const ccsPlat='Instagram (sample)';
 
 function ccsLooks(c){
   return DISC.filter(x=>x.id!==c.id).map(x=>{
@@ -7188,13 +5310,6 @@ function ccsOpen(type,cid,pid,focus){
   ccsPaint();
 }
 function ccsSet(k,v){ if(!S.ccs) return; S.ccs.f[k]=v; S.ccs.confirm=false; S.ccs.replaceAsk=false; S.ccs.enteredAsk=false; ccsPaint(); }
-function ccsCreator(id){
-  if(!S.ccs) return;
-  const ctx=S.ccs.ctx;
-  if(ccsDirty()){ S.ccDrafts=S.ccDrafts||{}; S.ccDrafts[ccsKey(ctx)]={...S.ccs.f}; }
-  const L=ccsLoadFor(ctx.type,id,ctx.pid);
-  S.ccs.ctx={...ctx,cid:id}; S.ccs.f=L.f; S.ccs.base=L.base; S.ccs.confirm=false; S.ccs.replaceAsk=false; ccsPaint();
-}
 function ccsLook(id,on){
   if(!S.ccs) return;
   const R=ccsCalc(S.ccs.ctx.cid,S.ccs.f); const cur=S.ccs.f.looks==null?R.selIds:S.ccs.f.looks;
@@ -7240,7 +5355,6 @@ function ccsSave(mode){
   if(S.ccDrafts) delete S.ccDrafts[ccsKey(s.ctx)];
   S.ccs=null; closeLayer(); paintBody(); toast(msg);
 }
-function ccsKeepAgreed(){ if(S.ccs){ S.ccs.replaceAsk=false; S.ccs.enteredAsk=false; ccsPaint(); } }
 
 function ccsPaint(){
   if(!S.ccs) return;
@@ -7716,31 +5830,10 @@ function plBulkStatusDo(){
 
 function dsTabsFor(k,opts,val,right=''){ return `<div class="ds-tabrow"><div class="ds-tabs" role="tablist">${opts.map(([v,l])=>`<button type="button" role="tab" aria-selected="${val===v}" class="${val===v?'on':''}" onclick="setPageState('${k}','${v}')">${l}</button>`).join('')}</div>${right}</div>`; }
 const dsBackSvg='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>';
-function dsEntity({back,backLabel,media,title,sub,actions}){
-  return `<header class="ds-dh"><div class="ds-dh-top"><button class="ds-dh-back" aria-label="Back to ${esc(backLabel)}" onclick="${back}">${dsBackSvg}</button>${media}<div class="ds-dh-text"><div class="ds-dh-name"><h1>${title}</h1></div><div class="ds-dh-meta">${sub}</div></div><div class="ds-dh-actions">${actions}</div></div></header>`;
-}
 
 function setShortlist(pid,cid,v){ const p=planOf(pid); if(!p)return; if(v==='Shortlisted'&&!String(p.brief||'').trim()&&!String(p.objective||'').trim()) return toast('Add the campaign brief before shortlisting creators'); p.shortlisted=p.shortlisted.filter(x=>x!==cid); if(v==='Shortlisted') p.shortlisted.push(cid); paintBody(); toast('Campaign plan updated'); }
 
-/* ---------- Campaign detail ---------- */
-/* Overview periods are calendar-based and default to the current month (TODAY) */
-function periodDef(){
-  const y=Number(TODAY.slice(0,4)), m=Number(TODAY.slice(5,7)), q=Math.floor((m-1)/3)*3+1;
-  const last=(yy,mm)=>new Date(Date.UTC(yy,mm,0)).getUTCDate();
-  const ds=(yy,mm,dd)=>`${yy}-${pad2(mm)}-${pad2(dd)}`;
-  return {
-    month:{from:ds(y,m,1),to:ds(y,m,last(y,m)),opt:tlMonLong(TODAY.slice(0,7))},
-    quarter:{from:ds(y,q,1),to:ds(y,q+2,last(y,q+2)),opt:`Q${Math.floor((m-1)/3)+1} ${y}`},
-    year:{from:ds(y,1,1),to:ds(y,12,31),opt:String(y)}
-  };
-}
 function postsForPeriod(c){ const r=rangeOf(S.cPeriod||'thisMonth',S.cCust); return r?c.posts.filter(p=>!p.date||(p.date>=r.from&&p.date<=r.to)):c.posts; }
-function periodWindowText(k){
-  const r=rangeOf(k,S.cCust);
-  if(!r) return 'Every post since the first campaign';
-  const f=d=>new Date(d+'T12:00:00Z').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'});
-  return `Live dates ${f(r.from)} to ${f(r.to)}`;
-}
 
 const TRACK_ROWS=[['comments','Track comments','Classify post comments and sentiment.'],['engagement','Track engagement','Refresh likes, views and comments.'],['authenticity','Track authenticity','Review possible manipulation of post engagement patterns.'],['ads','Track ads','Associate boosted promotion with published creator content.']];
 function trackPrefs(id){ const d={comments:true,engagement:true,authenticity:false,ads:false}; try{return Object.assign(d,JSON.parse(localStorage.getItem('creator_tracking_config_'+id))||{})}catch(e){return d} }
@@ -7890,7 +5983,6 @@ function psAudienceHTML(p,cr,sm){
 function psCmt(pid,f,pg){ S.psCmtF=f; S.psCmtPg=pg; psTab(pid,'comments'); }
 const simTag=()=>'<span class="ps-sim">Simulated</span>';
 const PS_IC={user:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',cal:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',video:'<rect x="2" y="6" width="14" height="12" rx="2"/><path d="m22 8-6 4 6 4z"/>',phone:'<rect x="5" y="2" width="14" height="20" rx="3"/><path d="M11 18h2"/>',tag:'<path d="M20 12 12 20l-8-8V4h8z"/><circle cx="8" cy="8" r="1.5"/>',box:'<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>',globe:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',chat:'<path d="M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5.4A8 8 0 1 1 21 12z"/>',zap:'<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',pen:'<path d="M4 20h4L19 9l-4-4L4 16z"/>',target:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',people:'<circle cx="9" cy="8" r="3.5"/><path d="M2 20a7 7 0 0 1 14 0M16 4.5a3.5 3.5 0 0 1 0 7M22 20a7 7 0 0 0-4-6.3"/>',text:'<path d="M4 6h16M4 12h10M4 18h7"/>',doc:'<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 13h6M9 17h6"/>',eye:'<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',coin:'<circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5a2.5 2.5 0 0 1 2.5-1.5h.5a2 2 0 0 1 0 4h-1a2 2 0 0 0 0 4h.5a2.5 2.5 0 0 0 2.5-1.5"/>',split:'<path d="M4 20V10M10 20V4M16 20v-6M22 20H2"/>',mega:'<path d="M3 11v2a1 1 0 0 0 1 1h3l5 4V6L7 10H4a1 1 0 0 0-1 1z"/><path d="M16 9a4 4 0 0 1 0 6"/>'};
-const PS_TINT={indigo:['#eff6ff','#1d4ed8'],violet:['#eff6ff','#2563eb'],teal:['#e0f2fe','#075985'],amber:['#fffbeb','#c2410c'],rose:['#fce7f3','#be185d'],slate:['#eff6ff','#1e40af'],green:['#dcfce7','#15803d']};
 const psIco=(k)=>`<i class="ps-ico"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${PS_IC[k]||PS_IC.doc}</svg></i>`;
 const psKv=(ico,tint,l,v)=>`<div class="ps-kv"><div><span>${l}</span><b>${v}</b></div></div>`;
 const psSec=(title,ico,tint,body,tag)=>`<section class="ps-sec"><header class="ps-sec-h">${psIco(ico)}<b>${title}</b>${tag||''}</header>${body}</section>`;
@@ -7932,26 +6024,9 @@ function postTableHTML(posts,showCampaign){
   return `<div class="ds-table-wrap ds-table-wrap--posts"><table class="ds-table ds-table--fit ds-table--dense"><thead><tr><th>Post / live date</th>${showCampaign?'<th>Campaign</th>':''}<th>Creator</th><th>Product</th><th>Concept</th><th>Organic / paid</th><th class="ds-num">Views</th><th class="ds-num">Spend</th><th class="ds-num">CPV</th><th>Action</th></tr></thead>
   <tbody>${posts.map(p=>`<tr><td>${postLinkCell(p)}${isViral(p)?'<span class="dk-viral">🔥 viral</span>':''}</td>${showCampaign?`<td><button class="ds-namebtn" onclick="openCampaign('${p.campaignId}')">${esc(p.campaignName)}</button></td>`:''}<td>${mini(crOf(p.creator))}</td><td class="dk-nw">${esc(p.product)}</td><td>${ctTag(p.concept)}</td><td class="dk-nw"><span class="dk-split-row"><span>${exactN(p.organic)} / ${exactN(p.paid)}</span>${boostBadge(p)}</span></td><td class="ds-num">${exactN(p.views)}</td><td class="ds-num">${rupees(p.cost)}</td><td class="ds-num">${cpvOf(p.cost,p.views)}</td><td><button class="ds-btn ds-btn--outline ds-btn--sm" onclick="openPost('${p.id}')">View post</button></td></tr>`).join('')||`<tr><td colspan="${cols}" class="ds-empty">No posts recorded in this view.</td></tr>`}</tbody></table></div>`;
 }
-function calHTML(c){
-  const month=S.calMonth||(c.posts.map(p=>p.date).sort().at(-1)||TODAY).slice(0,7);
-  const [y,m]=month.split('-').map(Number), days=new Date(Date.UTC(y,m,0)).getUTCDate(), offset=(new Date(Date.UTC(y,m-1,1)).getUTCDay()+6)%7;
-  const monthPosts=c.posts.filter(p=>p.date.startsWith(month));
-  const cells=Array.from({length:offset},()=>'<div class="ds-cal-day ds-cal-blank"></div>');
-  for(let d=1;d<=days;d++){ const day=month+'-'+String(d).padStart(2,'0'); const ps=c.posts.filter(p=>p.date===day);
-    cells.push(`<div class="ds-cal-day ${day===TODAY?'is-today':''}"><b>${d}</b>${ps.map(p=>`<button class="ds-cal-post" onclick="openPost('${p.id}')"><strong>${esc(crOf(p.creator)?.handle||'Creator')}</strong><span>${esc(p.format)} · ${esc(p.product)}</span><span>${exactN(p.views)} views · ${rupees(p.cost)}</span></button>`).join('')}</div>`); }
-  while(cells.length%7) cells.push('<div class="ds-cal-day ds-cal-blank"></div>');
-  const label=new Date(Date.UTC(y,m-1,1)).toLocaleDateString('en-IN',{month:'long',year:'numeric',timeZone:'UTC'});
-  const shift=n=>{const dt=new Date(Date.UTC(y,m-1+n,1));return dt.toISOString().slice(0,7);};
-  return `<section class="ds-cal"><div class="ds-toolbar"><button class="ds-btn ds-btn--outline ds-btn--sm" aria-label="Previous month" onclick="setPageState('calMonth','${shift(-1)}')">‹</button><span class="ds-section-title">${label}</span><button class="ds-btn ds-btn--outline ds-btn--sm" aria-label="Next month" onclick="setPageState('calMonth','${shift(1)}')">›</button><button class="ds-btn ds-btn--ghost ds-btn--sm" onclick="setPageState('calMonth','${TODAY.slice(0,7)}')">This month</button><span class="ds-spacer"></span><span class="ds-table-meta">${monthPosts.length} posts published</span></div>
-    ${!monthPosts.length?'<div class="ds-note">No posts published this month. Navigate to another month or return to List.</div>':''}
-    <div class="ds-cal-grid">${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d=>`<div class="ds-cal-wd">${d}</div>`).join('')}${cells.join('')}</div></section>`;
-}
 const VIEW_ICO={table:'table',cards:'grid',tabs:'list',report:'doc'};
 const dsViewSeg=(k,opts,val)=>`<div class="ds-seg ds-viewseg" role="tablist" aria-label="View">${opts.map(([v,l])=>{const ik=VIEW_ICO[v]; return `<button type="button" role="tab" aria-selected="${val===v}" aria-label="${l}" title="${l}" class="${val===v?'on':''}${ik?' ds-view-ico':''}" onclick="setPageState('${k}','${v}')">${ik?icon(ik,'ico-sm'):l}</button>`}).join('')}</div>`;
-const postLayoutSeg=()=>`<div class="ds-seg" role="tablist" aria-label="Post view"><button class="${(S.postLayout||'list')==='list'?'on':''}" onclick="setPageState('postLayout','list')">☷ List</button><button class="${S.postLayout==='calendar'?'on':''}" onclick="setPageState('postLayout','calendar')">▦ Calendar</button></div>`;
-const CS_BOOST='<svg viewBox="0 0 26 22" width="22" height="18" aria-hidden="true"><text x="3" y="17" font-size="17" font-family="Arial,sans-serif" font-weight="600" fill="#d97706">$</text><path d="M16 16V5m-4 4 4-4 4 4" fill="none" stroke="#d97706" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const TV_ICO={cal:'<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',chk:'<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/>',bolt:'<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',eye:'<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',wallet:'<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M16 12h2"/>'};
-const DK_PLAY='<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
 const campDate=d=>new Date(d+'T00:00:00Z').toLocaleDateString('en-IN',{month:'short',day:'numeric',timeZone:'UTC'});
 /* 10a/10b: a post is viral when it reaches at least 5× its creator's average views on their other posts */
 function creatorAvgViews(crId,exceptId){ const ps=CAMP_LIST.flatMap(c=>c.posts).filter(p=>p.creator===crId&&p.id!==exceptId); return ps.length?sumOf(ps,'views')/ps.length:0; }
@@ -7977,57 +6052,8 @@ function tbColsOpen(k){
   showModal('Columns',`<div class="tb-cols-list">${rows}</div>`,'<button class="ds-btn ds-btn--primary" onclick="closeLayer()">Done</button>');
 }
 function tbColToggle(k,i){ const h=tbHidden(k); S.tbHide={...(S.tbHide||{}),[k]:h.includes(i)?h.filter(x=>x!==i):[...h,i]}; paintBody(true); }
-function campMiniCols(rows,m){
-  const d=dkVal(rows,m), max=Math.max(1,...d.map(r=>r.v));
-  return `<div class="dk-cbars dk-cbars--mini">${d.map((r,i)=>`<div class="dk-cb"><b>${dkFmt(m,r.v)}</b><div class="dk-cb-t dk-cb-t--mini"><i style="height:${Math.max(4,r.v/max*110).toFixed(0)}px;background:${dkCol(i)}"></i></div><span title="${esc(r.name)}">${esc(r.name)}</span><small>${r.posts?new Set(r.posts.map(p=>p.creator)).size:0} creators</small></div>`).join('')||dkEmpty()}</div>`;
-}
 const CAMP_OWNERS=['Karan','Ankit','Unassigned'];
 const campOwnerOf=(c,crId)=>(c.owners||{})[crId]||c.manager||'Unassigned';
-const vgFmt=n=>n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?Math.round(n/1e3)+'K':String(Math.round(n));
-function vgNiceStep(raw){ const mag=Math.pow(10,Math.floor(Math.log10(Math.max(raw,1)))); return [1,2,2.5,5,10].map(k=>k*mag).find(v=>v>=raw); }
-/* Single cumulative views line (sparkline style), by post live date, within the selected period */
-function viewsGrowthHTML(posts,k,H0=220){
-  const r=rangeOf(k,S.cCust);
-  const mk=S.vgMetric||'views';
-  const val=p=>mk==='paid'?(p.paid||0):mk==='organic'?(p.organic||0):(p.views||0);
-  const sorted=[...posts].sort((a,b)=>a.date.localeCompare(b.date));
-  const dn=d=>Date.parse(d+'T00:00:00Z')/864e5;
-  const lastPost=sorted.length?sorted[sorted.length-1].date:TODAY;
-  const startStr=r?r.from:(sorted[0]?sorted[0].date:TODAY);
-  const endStr=r?(r.to<TODAY?r.to:TODAY):(lastPost>TODAY?lastPost:TODAY);
-  const s=dn(startStr), e=Math.max(s+1,dn(endStr));
-  const byDay={}; sorted.forEach(p=>{byDay[p.date]=(byDay[p.date]||0)+val(p);});
-  let cum=0; const pts=[{x:s,y:0}];
-  Object.keys(byDay).sort().forEach(d=>{cum+=byDay[d]; pts.push({x:Math.min(e,Math.max(s,dn(d))),y:cum});});
-  pts.push({x:e,y:cum});
-  const step=vgNiceStep(Math.max(cum,1)/4), ymax=step*4;
-  const W=640,H=H0,pl=52,pr=56,pt=14,pb=28,iw=W-pl-pr,ih=H-pt-pb;
-  const X=x=>pl+(x-s)/(e-s)*iw, Y=y=>pt+ih-(y/ymax)*ih;
-  const line=pts.map((p,i)=>`${i?'L':'M'}${X(p.x).toFixed(1)},${Y(p.y).toFixed(1)}`).join(' ');
-  const base=(pt+ih).toFixed(1);
-  const area=`${line} L${X(e).toFixed(1)},${base} L${pl},${base} Z`;
-  const grid=[0,1,2,3,4].map(i=>{const v=step*i, y=Y(v).toFixed(1);
-    return `<line class="vg-grid" x1="${pl}" x2="${W-pr}" y1="${y}" y2="${y}"/><text class="vg-tick" x="${pl-8}" y="${(+y+4).toFixed(1)}" text-anchor="end">${vgFmt(v)}</text>`;}).join('');
-  const xl=[0,1,2,3,4].map(i=>{const x=s+(e-s)*i/4, anchor=i===0?'start':i===4?'end':'middle', px=i===0?pl:i===4?W-pr:X(x);
-    return `<text class="vg-tick" x="${px.toFixed(1)}" y="${H-6}" text-anchor="${anchor}">${new Date(Math.round(x)*864e5).toLocaleDateString('en-GB',{day:'numeric',month:'short',timeZone:'UTC'})}</text>`;}).join('');
-  const boosts=sorted.filter(p=>p.paid>0).map(p=>{const x=X(Math.min(e,Math.max(s,dn(p.date)))).toFixed(1);
-    return `<g class="vg-boost"><line x1="${x}" x2="${x}" y1="${pt+ih-8}" y2="${pt+ih}"/><title>Boosted post · ${esc(campDate(p.date))} · ${exactN(p.paid)} boosted views</title></g>`;}).join('');
-  const ex=X(e).toFixed(1), ey=Y(cum).toFixed(1);
-  const seg=[['views','Total'],['organic','Organic'],['paid','Boosted']].map(([v,l])=>`<button type="button" role="tab" aria-selected="${mk===v}" class="${mk===v?'on':''}" onclick="setPageState('vgMetric','${v}')">${l}</button>`).join('');
-  return `<div class="ds-card vg"><div class="vg-head"><span class="ds-section-title">Views trend</span><div class="ds-seg vg-seg" role="tablist" aria-label="Views series">${seg}</div></div>
-    <span class="ds-caption">Cumulative, by post publish date · ticks mark boosted posts</span>
-    ${posts.length?'':'<p class="ds-caption">No posts went live in this period.</p>'}
-    <svg class="vg-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Cumulative views ${vgFmt(cum)}">${grid}<path class="vg-area" d="${area}"/><path class="vg-line" d="${line}" fill="none"/>${boosts}<circle class="vg-dot" cx="${ex}" cy="${ey}" r="4.5"/><text class="vg-end" x="${ex}" y="${(+ey-12).toFixed(1)}" text-anchor="end">${vgFmt(cum)}</text>${xl}</svg></div>`;
-}
-/* Overall spend against budget, with the post-wise breakdown */
-function spendBudgetHTML(c,posts){
-  const all=campSpend(c), bd=Number(c.budget||0), pct=bd?all/bd*100:0, tot=sumOf(posts,'cost')||1;
-  const rows=[...posts].sort((a,b)=>(b.cost||0)-(a.cost||0));
-  return `<div class="ds-card dk-w dk-compact sv${rows.length?'':' is-empty'}">${dkHead('cperf_spend','Spend vs budget','Post-wise breakdown for this period')}
-    <div class="sv-total"><b>${rupees(all)}</b><span>of ${rupees(bd)} budget${pct?` · ${Math.round(pct)}% used`:''}</span></div>
-    <div class="cp-bar sv-bar"><i style="width:${Math.min(100,pct)}%"></i></div>
-    <div class="sv-rows">${rows.map(p=>`<div class="sv-row"><span class="sv-who">${esc(cNameOf(p.creator))}<small>${campDate(p.date)} · ${esc(p.concept)}</small></span><span class="sv-amt">${rupees(p.cost||0)}</span><span class="sv-share" aria-hidden="true"><i style="width:${(p.cost||0)/tot*100}%"></i></span></div>`).join('')||dkEmptyState('No posts in this period.','Post-wise spend appears once posts go live.')}</div></div>`;
-}
 function performanceControlsHTML(){
  const scope=S.campPerfScope||'combined',metrics=S.campPerfMetrics||['views','organic','paid','spend','cpv'];
  const defs=[['views','Views'],['organic','Organic views'],['paid','Paid views'],['spend','Recorded creator cost'],['cpv','CPV']];
@@ -8074,17 +6100,6 @@ function campPerformanceHTML(c,posts0){
 
 /* Sentiment card for the campaign dashboard (same donut as the overall dashboard) */
 function campSentimentHTML(posts){ return `<div class="ds-card dk-w">${dkHead('sentiment','Sentiment','Tone of comments · not yet available')}${sentNAHTML()}</div>`; }
-/* Overview: gender, location and sentiment for the campaign's posts */
-function campBreakdownHTML(posts){
-  const unk=fn=>posts.length?Math.round(posts.filter(p=>!fn(p)).length/posts.length*100):0;
-  const g=p=>crAttr(p.creator,'gender'), st=p=>crAttr(p.creator,'state');
-  const rowsG=segRows(posts,g), rowsS=segRows(posts,st);
-  return `<div class="cp-three">
-    <div class="ds-card dk-w">${dkHead('gender','Creator gender',`Share of views · ${unk(g)}% unknown`)}${dkDonut(rowsG,dkMetric('gender'))}</div>
-    <div class="ds-card dk-w">${dkHead('state','Creator location',`Where creators are based · ${unk(st)}% unknown`)}${dkShare(rowsS,dkMetric('state'))}</div>
-    <div class="ds-card dk-w">${dkHead('sentiment','Sentiment','Tone of comments · not yet available')}${sentNAHTML()}</div>
-  </div>`;
-}
 /* Overview filters: creator, platform (from the post link), post type, organic / boosted */
 const campPlatform=p=>/tiktok/i.test(p.url||'')?'TikTok':'Instagram';
 function ovFilterPosts(posts){
@@ -8095,47 +6110,6 @@ function ovFilterPosts(posts){
 function campHdrBarHTML(c,curP,periodSet){
   const creators=c.creatorIds.map(crOf).filter(Boolean);
   return `<div class="cp-hdrbar"><div class="cp-hdr-l">${dsFilter('ovCreator','Creator',[['All','All creators'],...creators.map(x=>[x.id,x.name])],S.ovCreator||'All')}${dsFilter('ovPlatform','Platform',[['All','All platforms'],['Instagram','Instagram'],['TikTok','TikTok']],S.ovPlatform||'All')}${dsFilter('ovType','Post type',[['All','All types'],['reel','Reel'],['post','Post'],['carousel','Carousel']],S.ovType||'All')}${dsFilter('ovBoost','Organic / boosted',[['All','All posts'],['organic','Organic'],['boosted','Boosted']],S.ovBoost||'All')}</div><div class="cp-hdr-r">${periodCtrlHTML({value:curP,cust:S.cCust,opts:PERIOD_OPTS,set:periodSet,setCust:'setCampCust'})}</div></div>`;
-}
-function campOvFiltersHTML(c){
-  const creators=c.creatorIds.map(crOf).filter(Boolean);
-  return `<div class="ds-toolbar ds-toolbar--wrap dk-ctools cp-ovf">${dsFilter('ovCreator','Creator',[['All','All creators'],...creators.map(x=>[x.id,x.name])],S.ovCreator||'All')}${dsFilter('ovPlatform','Platform',[['All','All platforms'],['Instagram','Instagram'],['TikTok','TikTok']],S.ovPlatform||'All')}${dsFilter('ovType','Post type',[['All','All types'],['reel','Reel'],['post','Post'],['carousel','Carousel']],S.ovType||'All')}${dsFilter('ovBoost','Organic / boosted',[['All','All posts'],['organic','Organic'],['boosted','Boosted']],S.ovBoost||'All')}</div>`;
-}
-/* Overview: post performance table with the PRD fields; scrolls after 10 rows */
-function campOvPostsHTML(c,posts){
-  const so=S.ovPostSort||'views';
-  const cmp={views:(a,b)=>b.views-a.views,spend:(a,b)=>(b.cost||0)-(a.cost||0),cpv:(a,b)=>(a.views?(a.cost||0)/a.views:Infinity)-(b.views?(b.cost||0)/b.views:Infinity)}[so];
-  const rows=[...posts].sort(cmp);
-  const body=rows.map(p=>{const cr=crOf(p.creator), url=p.url||'';
-    return `<tr><td class="cs-first"><div class="ct-post-cell">${ctThumb(p)}<div class="ct-post-meta"><span class="ct-kind">${CT_LABEL[ctKind(p)]}</span>${url?`<a class="ct-link" href="${esc(url)}" target="_blank" rel="noopener">${esc(url.replace(/^https?:\/\//,''))}</a>`:'<span class="ct-link">No link added</span>'}</div></div></td><td>${campWho(cr)}</td><td>${campPlatform(p)}</td><td>${CT_LABEL[ctKind(p)]}</td><td class="dk-nw">${campDate(p.date)}</td><td class="ds-num">${exactN(p.views)}</td><td class="ds-num">${exactN(p.organic)}</td><td class="ds-num">${exactN(p.paid)}</td><td class="ds-num">${p.cost?rupees(p.cost):'—'}</td><td class="ds-num">${cpvOf(p.cost||0,p.views)}</td></tr>`;}).join('');
-  return `<div class="ds-card dk-w cp-posts">${dkHead('cperf_posts','Post performance','Every post in this campaign and period')}<div class="ds-toolbar ds-toolbar--wrap dk-ctools">${dsFilter('ovPostSort','Sort',[['views','Sort: Views'],['spend','Sort: Spend'],['cpv','Sort: CPV']],so)}</div><div class="ds-table-wrap dk-scroll dk-scroll-camps"><table class="ds-table ds-table--wide ds-table--scroll"><thead><tr><th class="cs-first">Post</th><th>Creator</th><th>Platform</th><th>Type</th><th>Published</th><th class="ds-num">Total views</th><th class="ds-num">Organic</th><th class="ds-num">Boosted</th><th class="ds-num">Spend</th><th class="ds-num">CPV</th></tr></thead><tbody>${body||'<tr><td colspan="10" class="ds-table-meta">No posts match these filters</td></tr>'}</tbody></table></div></div>`;
-}
-/* Overview: insights only where the posts support them */
-function campInsightsHTML(c,posts){
-  if(!posts.length) return '';
-  const items=[];
-  const top=[...posts].sort((a,b)=>b.views-a.views)[0];
-  items.push({t:'Top post',v:`${exactN(top.views)} views`,d:`${cNameOf(top.creator)} · ${campDate(top.date)}`});
-  const byC=c.creatorIds.map(id=>{const xp=posts.filter(p=>p.creator===id);return {id,views:sumOf(xp,'views'),cost:sumOf(xp,'cost'),n:xp.length};}).filter(r=>r.n);
-  const best=[...byC].sort((a,b)=>b.views-a.views)[0];
-  if(best&&best.views) items.push({t:'Best creator',v:`${exactN(best.views)} views`,d:`${cNameOf(best.id)} · ${best.n} post${best.n>1?'s':''}`});
-  const blended=sumOf(posts,'views')?sumOf(posts,'cost')/sumOf(posts,'views'):0;
-  const weak=byC.filter(r=>r.cost>0&&r.views>0&&r.cost/r.views>blended*1.5).sort((a,b)=>b.cost/b.views-a.cost/a.views)[0];
-  if(weak) items.push({t:'High spend, low views',v:`${cpvOf(weak.cost,weak.views)} CPV`,d:`${cNameOf(weak.id)} · ₹${Math.round(weak.cost).toLocaleString('en-IN')} spend · blended ₹${blended.toFixed(2)}`});
-  if(!items.length) return '';
-  return `<div class="ds-card dk-w dk-insights cp-ins-card">${dkHead('cperf_ins','Insights','From this campaign\'s posts')}<div class="dk-ins-grid cp-ins">${items.map(x=>`<div class="dk-ins"><span class="dk-ins-tag">${x.t}</span><b class="dk-ins-t">${x.v}</b><span class="dk-ins-r">${esc(x.d)}</span></div>`).join('')}</div></div>`;
-}
-/* Overview: creator performance table (search + sort), scrolls after 10 rows */
-function campCreatorPerfHTML(c,posts){
-  const q=(S.ovQ||'').toLowerCase().trim(), so=S.ovSort||'views';
-  const rows=c.creatorIds.map(crOf).filter(Boolean).map(x=>{
-    const xp=posts.filter(p=>p.creator===x.id), views=sumOf(xp,'views'), cost=sumOf(xp,'cost');
-    return {x,n:xp.length,views,org:sumOf(xp,'organic'),paid:sumOf(xp,'paid'),cost,cpv:views?cost/views:Infinity};
-  }).filter(r=>!q||`${r.x.name} ${r.x.handle}`.toLowerCase().includes(q));
-  const key={views:r=>-r.views,spend:r=>-r.cost,cpv:r=>r.cpv}[so]||(r=>-r.views);
-  rows.sort((a,b)=>key(a)-key(b));
-  const toolbar=`<div class="ds-toolbar ds-toolbar--wrap dk-ctools">${campSearchBox('ovQ','Search creator or handle')}${dsFilter('ovSort','Sort',[['views','Sort: Views'],['spend','Sort: Spend'],['cpv','Sort: CPV']],so)}</div>`;
-  const body=rows.map(r=>`<tr><td class="cs-first"><div class="ds-who">${dsAv(r.x.id,r.x.name)}<span class="ds-who-text"><button class="ds-namebtn" onclick="openCreatorSide('${r.x.id}')">${esc(r.x.name)}</button><small>${esc(r.x.handle)}</small></span></div></td><td class="ds-num">${r.n||'—'}</td><td class="ds-num">${r.n?exactN(r.views):'—'}</td><td class="ds-num">${r.n?exactN(r.org):'—'}</td><td class="ds-num">${r.n?exactN(r.paid):'—'}</td><td class="ds-num">${r.cost?'₹'+Math.round(r.cost).toLocaleString('en-IN'):'—'}</td><td class="ds-num">${r.n?cpvOf(r.cost,r.views):'—'}</td></tr>`).join('');
-  return `<div class="ds-card dk-w cp-creators">${dkHead('cperf_creators','Creator performance','Views, spend and CPV per creator')}${toolbar}<div class="ds-table-wrap dk-scroll dk-scroll-camps"><table class="ds-table ds-table--wide ds-table--scroll"><thead><tr><th class="cs-first">Creator</th><th class="ds-num">Posts</th><th class="ds-num">Total views</th><th class="ds-num">Organic</th><th class="ds-num">Boosted</th><th class="ds-num">Spend</th><th class="ds-num">CPV</th></tr></thead><tbody>${body||'<tr><td colspan="7" class="ds-table-meta">No creators match this search</td></tr>'}</tbody></table></div></div>`;
 }
 /* Post thumbnail in its real shape: reel 9:16, post 1:1, carousel 4:5 with stacked slides */
 function ctKind(p){ return p.format==='Carousel'?'carousel':p.format==='Post'?'post':p.format==='Story'?'story':p.format==='Video'?'video':'reel'; }
@@ -8251,37 +6225,6 @@ function ctEditSave(cid,pid,f,v){
 }
 
 function openContentSide(pid){ psOpen(pid); }
-function dkCar(btn,d){
-  const car=btn.closest('.dk-car'), sl=car.querySelectorAll('.dk-slide'), n=sl.length;
-  const i=(((+car.dataset.i+d)%n)+n)%n; car.dataset.i=i;
-  sl.forEach((s,k)=>s.classList.toggle('is-on',k===i));
-  car.querySelectorAll('.dk-dot2').forEach((x,k)=>x.classList.toggle('is-on',k===i));
-  car.querySelector('.dk-count').textContent=`${i+1} / ${n}`;
-}
-function campContentSideHTML(p,cr,m){
-  const kind=m.kind, n=kind==='carousel'?3:1, shade=i=>PASTELS[(avHash(p.id)+i)%PASTELS.length][0];
-  let media;
-  if(kind==='video'){
-    media=`<div class="dk-player"><div class="dk-screen" style="background:${shade(0)}"><span class="dk-screen-label">${esc(p.concept)} · ${esc(p.product)}</span><button type="button" class="dk-play" aria-label="Play" onclick="this.closest('.dk-player').classList.toggle('is-playing')">${DK_PLAY}</button></div><div class="dk-controls"><div class="dk-scrub"><i style="width:34%"></i></div><div class="dk-ctrl-row"><span>0:10 / 0:30</span><span>Muted</span></div></div></div>`;
-  } else {
-    const label=i=>kind==='image'?'Image':`Slide ${i+1} of ${n}`;
-    media=`<div class="dk-car" data-i="0">${Array.from({length:n},(_,i)=>`<div class="dk-slide${i===0?' is-on':''}" style="background:${shade(i)}"><span class="dk-screen-label">${label(i)}</span></div>`).join('')}${n>1?`<button type="button" class="dk-nav dk-prev" aria-label="Previous slide" onclick="dkCar(this,-1)">‹</button><button type="button" class="dk-nav dk-next" aria-label="Next slide" onclick="dkCar(this,1)">›</button><div class="dk-dots">${Array.from({length:n},(_,i)=>`<i class="dk-dot2${i===0?' is-on':''}"></i>`).join('')}</div><span class="dk-count">1 / ${n}</span>`:''}</div>`;
-  }
-  return `<div class="dk-side">
-    <div class="dk-media-box">${media}</div>
-    <div class="dk-sidehead"><div class="dk-who-big">${cr?dsAv(cr.id,cr.name):''}<div><b>${esc(cNameOf(p.creator))}</b><small>${esc(cr?cr.handle:'')}</small></div></div>${m.viral?'<span class="dk-viral">🔥 viral</span>':''}</div>
-    <div class="dk-chips">${dsBadge(p.concept)}${dsBadge(p.product)}${dsBadge(p.format)}${p.paid>0?`<span class="dk-boost" title="Boosted">${CS_BOOST}</span>`:''}<span class="ds-caption">Live ${campDate(p.date)}</span></div>
-    <div class="dk-metrics">
-      <div><span>Views</span><b>${exactN(p.views)}</b></div><div><span>Likes</span><b>${exactN(m.likes)}</b></div>
-      <div><span>Comments</span><b>${exactN(m.comments)}</b></div><div><span>ER%</span><b>${m.er.toFixed(1)}%</b></div>
-      <div><span>Organic views</span><b>${exactN(p.organic)}</b></div><div><span>Paid views</span><b>${exactN(p.paid)}</b></div>
-      <div><span>Cost per view</span><b id="sheetCPV">${cpvOf(p.cost,p.views)}</b></div><div><span>Post cost</span><b>${rupees(p.cost)}</b></div>
-    </div>
-    <label class="dk-costf"><span>Edit post cost (₹)</span><input id="sheetCost" type="number" min="0" step="100" value="${p.cost}" oninput="updateSheetCPV('${p.id}')"></label>
-    <span class="ds-caption" id="sheetFormula">${rupees(p.cost)} ÷ ${exactN(p.views)} views</span>
-    <div class="ds-drawer-foot"><a class="ds-btn ds-btn--outline ds-btn--sm" href="${esc(p.url)}" target="_blank" rel="noreferrer">Open original ↗</a><span class="ds-spacer"></span><button class="ds-btn ds-btn--outline ds-btn--sm ps-remove" onclick="openRemovePost('${p.campaignId}','${p.id}')">Remove</button><button class="ds-btn ds-btn--primary ds-btn--sm" onclick="saveSheetCost('${p.id}')">Save cost</button></div>
-  </div>`;
-}
 function setCampOwner(cid,crId,v){ const c=campOf(cid); c.owners=c.owners||{}; c.owners[crId]=v; paintBody(); toast(`SPOC set to ${v}`); }
 function setCreatorCost(cid,crId,val){
   const c=campOf(cid), v=parseAmt(val);
@@ -8339,7 +6282,6 @@ function campCreatorsHTML(c,posts){
   return `${toolbar}<div class="ds-table-wrap cr-wrap"><table class="ds-table cr-table"><thead><tr><th class="cs-first">Creator</th><th>Tier</th><th>SPOC</th><th class="ds-num">Reels</th><th>Last live</th><th>Product</th><th>Concept</th><th>Type</th><th class="ds-num">Views</th><th class="ds-num">Organic</th><th class="ds-num">Paid</th><th class="ds-num">ER%</th><th class="ds-num">Cost</th><th class="ds-num">CPV</th><th>Tags</th><th>Status</th><th class="cs-last"></th></tr></thead><tbody>${body}</tbody></table></div>`;
 }
 
-const campStatusPill=c=>`<span class="dk-live${c.status==='Active'?'':' dk-live--off'}"><i></i>${c.status==='Active'?'Active':'Inactive'}</span>`;
 function campPlanEmbedHTML(c){
   if(S.plCampId!==c.id||!S.plDraft){ S.plDraft=plDraftFrom(c.plan||null); S.plCampId=c.id; }
   S.plDraft.open={s3:true,s4:true,s5:true};
@@ -8394,17 +6336,6 @@ function campBriefReadHTML(c){
   const activity=`<section class="cbs-sec"><h3>Recent changes</h3><ul class="cbs-log"><li><span>Brief updated</span><small>Today, 11:20 · Ankit</small></li><li><span>Key messages edited</span><small>2 Nov · Priya</small></li><li><span>Budget raised to ${money(d.budget)}</span><small>28 Oct · Rahul</small></li></ul></section>`;
   return `<div class="cbs">${stats}${obj}${creative}${bench}${activity}</div>`;
 }
-function campBriefHTML(c){
-  const cats=[...new Set(['Beauty','Wellness','Lifestyle','Fashion','Tech','Skincare',c.category])];
-  return `<div class="ds-card ds-pad dk-brief"><div class="dk-brief-head"><span class="ds-section-title">Campaign brief</span><p class="ds-caption">Core details for this campaign. Creators and posts are managed in their own tabs.</p></div>
-    <div class="ds-form">${dlgFld('Campaign name','fname',c.name)}${dlgFld('Product','fproduct',c.product)}${dlgSel('Category','fcategory',cats,c.category)}${dlgFld('Budget (₹)','fbudget',c.budget,'number')}${dlgFld('Planned posts','fposts',c.plannedVideos,'number')}${dlgSel('Status','fstatus',['Active','Completed','Draft'],c.status)}${dlgSel('Tracking','ftracking',['On','Stopped'],c.tracking===false?'Stopped':'On')}</div>
-    <div class="ds-actions"><button class="ds-btn ds-btn--primary" onclick="saveBrief('${c.id}')">Save brief</button></div></div>`;
-}
-function saveBrief(id){
-  const c=campOf(id); const name=dlgVal('fname'); if(!name) return toast('Enter a campaign name');
-  Object.assign(c,{name,product:dlgVal('fproduct'),category:dlgVal('fcategory'),budget:Number(dlgVal('fbudget'))||0,plannedVideos:Number(dlgVal('fposts'))||0,status:dlgVal('fstatus'),tracking:dlgVal('ftracking')!=='Stopped'});
-  paintBody(); toast('Brief saved');
-}
 const campCreators = [
   { name:'Pavan K Sirisin', handle:'@pavansirisin', tier:'Macro', reels:2, views:'480K', org:'320K', paid:'160K', er:'5.0%', cost:'₹45K', cpv:'₹0.09', status:'delivered', viral:false },
   { name:'Gaurav Sunil', handle:'@gaurav_kaizoku', tier:'Mega', reels:1, views:'420K', org:'380K', paid:'40K', er:'7.4%', cost:'₹80K', cpv:'₹0.19', status:'delivered', viral:true },
@@ -8424,7 +6355,6 @@ const campReels = [
   { creator:'Kylie', handle:'@kyliejenner', concept:['Unboxing'], date:'Oct 20', views:'110K', likes:'5K', comments:'312', er:'4.8%', type:'organic', cost:'₹15K', cpv:'₹0.14' },
   { creator:'Vedictoons', handle:'@vedictoons', concept:['Routine'], date:'Oct 15', views:'180K', likes:'9K', comments:'678', er:'5.4%', type:'organic', cost:'₹35K', cpv:'₹0.19' },
 ];
-
 
 const ini=n=>n.split(' ').map(w=>w[0]).join('');
 const ANA_AV=['#7c3aed','#9d174d','#1d4ed8','#c2410c','#075985','#15803d','#1e40af','#c2410c','#be185d','#1e40af'];
@@ -8519,14 +6449,6 @@ function anaSegHTML(dim){
   const dims=anaDims();
   return `<div class="ds-seg ana-seg" role="tablist" aria-label="Group by">${ANA_DIMS.map(d=>`<button type="button" role="tab" aria-selected="${dim===d}" class="${dim===d?'on':''}" onclick="setPageState('cDim','${d}')">${d}<span>${(dims[d]||[]).length}</span></button>`).join('')}</div>`;
 }
-const anaTxt=l=>{const m=String(l).match(/ana-name">([^<]+)/);return m?m[1]:String(l).replace(/<[^>]+>/g,'').trim();};
-function anaSummaryHTML(dim){
-  const rows=(anaDims()[dim]||[]).map(r=>S.anaBoost?anaBoostRow(r):r).filter(Boolean);
-  const v=rows.reduce((a,r)=>a+anaN(r.views),0), sp=rows.reduce((a,r)=>a+anaN(r.spend),0);
-  const top=[...rows].sort((a,b)=>anaN(b.views)-anaN(a.views))[0];
-  const card=(l,val,sub,ico)=>`<div class="ana-stat"><i class="ana-ico">${DK_SVG(DK_ICO[ico])}</i><small>${l}</small><b>${val}</b>${sub?`<span>${sub}</span>`:''}</div>`;
-  return `<div class="ana-sum">${card(dim+' groups',rows.length,'','total')}${card('Views',anaFmt(v),'','views')}${card('Spend','₹'+anaFmt(sp),'','spend')}${top?card('Top '+dim.toLowerCase(),esc(anaTxt(top.label)),`${v?Math.round(anaN(top.views)/v*100):0}% of views`,'paid'):card('Top '+dim.toLowerCase(),'—','','paid')}</div>`;
-}
 function anaToggle(id,tr){
   const open=tr.classList.toggle('is-open');
   document.querySelectorAll(`.ana-child[data-p="${id}"]`).forEach(r=>r.classList.toggle('is-open',open));
@@ -8541,7 +6463,6 @@ function campaignTrackingHTML(c,posts){
  <section class="ds-card" style="padding:0;margin-top:12px"><div class="ds-section-head" style="padding:12px 14px"><h3 style="margin:0;font-size:14px">Recent campaign content</h3><button class="ds-btn ds-btn--ghost ds-btn--sm" onclick="S.trackerCampaign='${c.id}';setPage('content-tracker')">See all ${posts.length} posts →</button></div><div class="ds-table-wrap"><table class="ds-table"><thead><tr><th>Post</th><th>Creator</th><th>Status</th><th class="ds-num">Views</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="5" class="ds-caption">No posts yet.</td></tr>'}</tbody></table></div></section>
  <p class="ds-caption" style="margin-top:12px">Campaign tracking is scoped to this campaign. The content tracker is the cross-campaign queue. Both use the same post records.</p></div>`;
 }
-function campaignReturnLabel(){const r=S.campReturn;if(!r)return 'Campaigns';if(r.page==='content-tracker')return 'Content tracker';if(r.page==='creators')return 'My creators';if(r.page==='discover')return 'Discover';if(r.page==='collection'||r.page==='collections')return 'Collections';if(r.page==='shortlist'||r.page==='plan')return 'Campaign plan';if(r.page==='dashboard')return 'Cumulative dashboard';if(r.page==='tracker')return 'Campaign tracker';if(r.page==='campaigns')return 'My campaigns';return 'Campaigns';}
 function returnFromCampaign(){const r=S.campReturn;if(!r){setPage('campaigns');return;}S.page=r.page||'campaigns';S.myCreator=r.myCreator||null;S.discCreator=r.discCreator||null;paintHeader();paintBody(true);window.scrollTo(0,0);}
 function campaignGroupOf(c){return (c&&String(c.groupName||'').trim())||((c&&c.product)||'Ungrouped initiative');}
 function openCampaignQuick(id){
@@ -8602,14 +6523,9 @@ function campaignDetailHTML(){
     ${body}
   </div>`;
 }
-function openProduct(name,cid){
-  const rows=(cid?campOf(cid).posts.filter(p=>p.product===name).map(p=>({...p,campaignId:cid,campaignName:campOf(cid).name})):CAMP_LIST.flatMap(c=>c.posts.filter(p=>p.product===name).map(p=>({...p,campaignId:c.id,campaignName:c.name}))));
-  postsDrawer(name,rows);
-}
 /* ---------- Dialogs ---------- */
 const dlgFld=(label,id,val,type='text')=>`<label class="ds-field"><span>${label}</span><input id="${id}" type="${type}" value="${esc(val)}"></label>`;
 const dlgSel=(label,id,opts,val)=>`<label class="ds-field"><span>${label}</span><select id="${id}">${opts.map(o=>`<option ${o===val?'selected':''}>${esc(o)}</option>`).join('')}</select></label>`;
-const dlgChecks=(ids)=>`<div class="ds-checks">${DISC.map(c=>`<label class="ds-check"><input type="checkbox" class="cr-choice" value="${c.id}" ${ids.includes(c.id)?'checked':''}><span>${esc(c.name)} <small>${esc(c.handle)}</small></span></label>`).join('')}</div>`;
 /* Creator picker for campaigns: a table of the shortlist with all columns, one checkbox per row */
 const dlgCreatorTable=(ids,pool)=>{
   const rows=pool.map(c=>`<tr data-q="${esc(`${c.name} ${c.handle}`.toLowerCase())}" class="${ids.includes(c.id)?'is-sel':''}"><td class="ds-cb"><input type="checkbox" class="cr-choice" value="${c.id}" aria-label="Select ${esc(c.name)}" ${ids.includes(c.id)?'checked':''}></td><td class="cs-first"><div class="ds-who">${dsAv(c.id,c.name)}<span class="ds-who-text"><b>${esc(c.name)}</b><small>${esc(c.handle)}</small></span></div></td><td>${esc(c.tier||'—')}</td><td class="ds-num">${c.followers?fmt(c.followers):'—'}</td><td class="ds-num">${c.views?fmt(c.views):'—'}</td><td class="ds-num">${c.engagement?c.engagement+'%':'—'}</td><td>${esc(c.country||'—')}</td><td>${esc((c.platforms||[]).join(', ')||'—')}</td><td>${esc(c.source||'—')}</td></tr>`).join('');
@@ -8725,15 +6641,6 @@ function savePlanDraft(){
   if(S.plMode==='new'){ const nid='pl'+Date.now(); CAMP_PLANS.unshift({id:nid,creators:[],shortlisted:[],created:TODAY,...f}); closeLayer(); openPlan(nid); toast('Campaign plan created'); return; }
   Object.assign(planOf(S.plId),f); closeLayer(); paintBody(); toast('Plan saved');
 }
-function linkCreatorsTableHTML(cur){
-  const list=DISC.filter(c=>!c.repo);
-  const rows=list.map(c=>{const m=mx(c);return `<tr data-q="${esc((c.name+' '+c.handle).toLowerCase())}" class="${cur.includes(c.id)?'is-selected':''}"><td class="ds-cb"><input type="checkbox" class="cr-choice" value="${c.id}" aria-label="Select ${esc(c.name)}" ${cur.includes(c.id)?'checked':''} onchange="this.closest('tr').classList.toggle('is-selected',this.checked)"></td>
-    <td><div class="ds-person">${dsAv(c.id,c.name)}<div class="ds-person-text"><span class="ds-table-title">${esc(c.name)}</span><span class="ds-table-meta">${esc(c.handle)}</span></div></div></td>
-    <td>${tierTag(c.tier)}</td><td class="ds-num">${fmt(c.followers)}</td><td>${dsBadge(m.status)}</td><td>${esc(m.owner||'Unassigned')}</td></tr>`;}).join('');
-  return `<div class="ds-toolbar"><div class="ds-input"><span class="ds-input-icon">${icon('search','ico-sm')}</span><input aria-label="Search creators" placeholder="Search by name or handle" oninput="linkCreatorsFilter(this.value)"></div></div>
-    <div class="ds-table-wrap my-wrap link-wrap"><table class="ds-table ds-table--wide ds-table--dense my-table" id="linkTbl"><thead><tr><th class="ds-cb"></th><th>Creator</th><th>Tier</th><th class="ds-num">Followers</th><th>Status</th><th>Owner</th></tr></thead><tbody>${rows}</tbody></table></div>`;
-}
-function linkCreatorsFilter(v){ const q=v.toLowerCase().trim(); document.querySelectorAll('#linkTbl tbody tr').forEach(r=>{r.style.display=r.dataset.q.includes(q)?'':'none';}); }
 function openAttachTo(kind,id){
   if(kind==='plan'){ openAddToPlan(id); return; }
   S.linkCamp=id; S.linkMode='mine'; S.linkSel=[...campOf(id).creatorIds]; S.linkQ=''; S.linkText=''; S.linkFile=null;
@@ -8804,12 +6711,6 @@ function linkDlgHTML(){
 }
 function linkSave(id){
   const c=campOf(id); c.creatorIds=[...new Set(linkResolved())];
-  closeLayer(); paintBody(); toast('Creators updated');
-}
-function saveAttach(kind,id){
-  const ids=dlgChecked();
-  if(kind==='plan'){ const p=planOf(id); p.creators=ids; p.shortlisted=p.shortlisted.filter(x=>ids.includes(x)); }
-  else campOf(id).creatorIds=ids;
   closeLayer(); paintBody(); toast('Creators updated');
 }
 function lnchInit(p){
@@ -9380,15 +7281,6 @@ function campContentHTML(c,withCamp){
   }
   return trkSummaryHTML(c,withCamp)+campLiveTableHTML(c,withCamp,segChip);
 }
-function savePost(cid,pid){
-  const c=campOf(cid), p=pid?c.posts.find(x=>x.id===pid):null;
-  const creatorName=dlgVal('fcreator'); const creator=c.creatorIds.find(id=>cNameOf(id)===creatorName)||c.creatorIds[0];
-  const organic=Number(dlgVal('forganic'))||0, paid=Number(dlgVal('fpaid'))||0, cost=Number(dlgVal('fcost'))||0;
-  const date=dlgVal('fdate'); if(!date) return toast('Enter a live date');
-  const rec={url:dlgVal('furl'),creator,product:dlgVal('fproduct')||c.product,date,organic,paid,views:organic+paid,cost,concept:dlgVal('fconcept'),format:'Reel'};
-  if(p) Object.assign(p,rec); else c.posts.push({id:'po'+Date.now(),...rec});
-  closeLayer(); paintBody(); if(p) toast('Post saved'); else addToast('Successfully added','A post has been successfully added to',c.name,()=>openCampaign(cid));
-}
 function openCampaignPost(pid){
   const c=CAMP_LIST.find(c=>c.posts.some(p=>p.id===pid)), p=c.posts.find(x=>x.id===pid), cr1=crOf(p.creator);
   openDrawer('Post details',`${esc(c.name)} · Published ${esc(p.date)}`,`<div class="ds-grid2 ds-drawer-grid">
@@ -9410,12 +7302,6 @@ function openRemovePost(cid,pid){
     `<button class="ds-btn ds-btn--outline" onclick="closeLayer()">Cancel</button><button class="ds-btn ds-btn--danger" onclick="removePost('${cid}','${pid}')">Remove post</button>`);
 }
 function removePost(cid,pid){ const c=campOf(cid); c.posts=c.posts.filter(p=>p.id!==pid); closeLayer(); paintBody(); toast('Post removed from campaign'); }
-function openUnlink(cid,crid){
-  const c=campOf(cid), x=crOf(crid);
-  dlg('Unlink creator from campaign',`Remove ${esc(x.name)} from ${esc(c.name)}?`,`<div class="ds-note ds-note--warn">The creator stays in My Creators. Existing posts should be reassigned or removed first. This action is blocked when linked posts are still present.</div>`,
-    `<button class="ds-btn ds-btn--outline" onclick="closeLayer()">Cancel</button><button class="ds-btn ds-btn--danger" onclick="unlinkCreator('${cid}','${crid}')">Unlink creator</button>`);
-}
-function unlinkCreator(cid,crid){ const c=campOf(cid); if(c.posts.some(p=>p.creator===crid)) return toast('Reassign or remove this creator\'s posts first'); c.creatorIds=c.creatorIds.filter(x=>x!==crid); closeLayer(); paintBody(); toast('Creator unlinked'); }
 function markCampaignEnded(cid){ const c=CAMP_LIST.find(x=>x.id===cid); if(!c) return; c.status='Completed'; paintHeader(); paintBody(true); toast('Campaign marked as ended'); }
 function openDeleteCampaign(cid){
   const c=campOf(cid); if(!c) return;
@@ -9552,7 +7438,6 @@ function openCustomField(k){ const t=tplOf(k)||CSV_TEMPLATES[0]; dlg(`Add custom
 function addCustomField(k){ const n=dlgVal('fname'); if(!n) return toast('Enter a column name'); if(tplHead(k).some(x=>x.toLowerCase()===n.toLowerCase())) return toast('This template already has that column'); CUSTOM_COLS[k]=[...(CUSTOM_COLS[k]||[]),n]; closeLayer(); paintBody(); toast(`Column added to ${tplOf(k).title}`); }
 function confirmReset(){ dlg('Reset demo data?','This restores the sample dataset for this prototype.','',`<button class="ds-btn ds-btn--outline" onclick="closeLayer()">Cancel</button><button class="ds-btn ds-btn--danger" onclick="closeLayer();toast('Demo reset · prototype only')">Reset</button>`); }
 
-
 /* ── Deeplinks: #/<page>[/<id>][?tab=<n|key>&post=<id>] ── */
 const ROUTE_PAGES=['discover','creators','shortlist','dashboard','campaigns','campaign','plan','settings'];
 function syncHash(){
@@ -9631,4 +7516,3 @@ const dsFilterObserver=new MutationObserver(()=>dsEnhanceFilters(document.getEle
 dsFilterObserver.observe(document.getElementById('main'),{childList:true,subtree:true});
 dsEnhanceFilters();
 document.addEventListener('click',e=>{ if(S.acPop && !e.target.closest('.ac-bar--top,.ac-zwrap,.ac-vwrap,.ac-tab-add')){ S.acPop=null; paintBody(); } });
-

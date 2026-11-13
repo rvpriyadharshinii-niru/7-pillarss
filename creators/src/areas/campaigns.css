@@ -205,9 +205,8 @@ svg [fill="#1e40af"]{fill:var(--primary)}
 
 /* ── Avatars & stacks ──────────────────────────────────────────────────── */
 .ds-avatar{border-radius:999px;font-size:12px!important;font-weight:600;letter-spacing:-.02em;color:#fff;flex:none;display:inline-flex;align-items:center;justify-content:center;line-height:1;overflow:hidden}
-.ds-page .ds-avatar-stack .ds-avatar,.ds-avatar-stack .ds-avatar{width:28px;height:28px;border:2px solid #fff!important}
-.ds-avatar-stack{display:inline-flex;align-items:center;padding-left:4px}
-.ds-avatar-stack .ds-avatar-more{width:28px;height:28px;margin-left:-4px;border-radius:999px;background:var(--slate-100);border:2px solid #fff;color:var(--slate-600);font-size:12px;font-weight:500;display:inline-flex;align-items:center;justify-content:center}
+.ds-avatar-stack{display:inline-flex;align-items:center;gap:6px}
+.ds-avatar-stack .ds-avatar-more{width:24px;height:24px;margin-left:0;border-radius:999px;background:var(--slate-100);border:1px solid var(--slate-200);color:var(--slate-600);font-size:12px;font-weight:500;display:inline-flex;align-items:center;justify-content:center}
 .cp-creators{display:flex;align-items:center;gap:8px}
 .ds-who{display:flex;align-items:center;gap:8px;min-width:0}
 .ds-person{display:flex;align-items:center;gap:12px;min-width:0}
@@ -246,6 +245,9 @@ svg [fill="#1e40af"]{fill:var(--primary)}
 .ds-head .ds-page-desc{margin-top:4px!important}
 .ds-actions{display:flex;align-items:center;gap:8px;margin:0!important}
 .ds-tabrow{margin:0 0 16px!important}
+.campl .ds-tabrow{margin-top:0!important}
+.campl-card-top{align-items:flex-start}
+.campl-card-top .life{align-self:flex-start;margin-top:2px}
 .campl-tools{display:flex;align-items:center;gap:8px;margin:0 0 16px!important;flex-wrap:wrap}
 .campl-tools .ds-input{min-width:240px}
 .campl-colbtn{height:36px;border:1px solid var(--border)!important;border-radius:var(--r-md);background:#fff!important;color:var(--foreground)!important;font-weight:500;box-shadow:var(--shadow-xs)}
@@ -286,5 +288,30 @@ svg [fill="#1e40af"]{fill:var(--primary)}
 .campl-card-row{font-size:13px;color:var(--slate-600)}
 .campl-card-foot{font-size:12px;color:var(--slate-500)!important;border-top:1px solid var(--slate-100)!important;padding-top:12px!important}
 .campl-card-id{gap:4px}
+
+
+/* ── Campaign detail ───────────────────────────────────────────────────── */
+.cp-ov .dk-ov-cells{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+.cov-pipe{background:#fff;border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xs);padding:20px!important;display:flex;flex-direction:column;gap:16px}
+.cov-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.cov-head .ds-section-title{display:flex;align-items:baseline;gap:8px}
+.cov-steps{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.cov-steps>div{background:var(--slate-50)!important;border:1px solid var(--border);border-radius:var(--r-md);padding:12px 16px;display:flex;flex-direction:column;gap:2px}
+.cov-steps span{font-size:12px;color:var(--slate-500)}
+.cov-steps b{font-size:20px;font-weight:600;letter-spacing:-.02em;color:var(--foreground);font-variant-numeric:tabular-nums}
+.cov-bar{height:8px!important}
+.cdh{margin-bottom:0}
+.cdh-top{display:flex;align-items:center;gap:12px}
+.cdh-main{min-width:0}
+.cdh-title{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.cdh-meta{font-size:13px;margin-top:4px}
+.cdh-actions{display:flex;align-items:center;gap:8px;margin-left:auto}
+.cdh-tabs{margin-top:8px}
+.ds-dh-back{width:32px;height:32px;border:1px solid var(--border);border-radius:var(--r-md);background:#fff;box-shadow:var(--shadow-xs);color:var(--slate-600);display:inline-grid;place-items:center}
+.ds-dh-back:hover{background:var(--slate-50)}
+.ds-media{border-radius:var(--r-md)}
+.cp-hdrbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:16px 0}
+.cp-hdr-l,.cp-hdr-r{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.cp-grid .ds-card{box-shadow:var(--shadow-xs)}
 
 }
