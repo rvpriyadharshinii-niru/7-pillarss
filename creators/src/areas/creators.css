@@ -42,7 +42,7 @@
 .ds-page .ds-filter .ds-menu .ds-menu-item:hover,.ds-filter .ds-menu .ds-menu-item:hover{background:var(--slate-100)}
 .ds-page .ds-filter .ds-menu .ds-menu-item.is-on{background:var(--slate-50);font-weight:500}
 .ds-filter .ds-menu .ds-menu-ck{width:14px;color:var(--primary);font-size:12px}
-.disc-matches{display:inline-flex;align-items:center;height:32px;padding:0 4px;color:var(--muted-foreground);font-size:13px;white-space:nowrap}
+.disc-matches{display:inline-flex;align-items:center;height:32px;padding:0 4px;border:0;border-radius:0;background:transparent;color:var(--muted-foreground);font-size:13px;white-space:nowrap}
 .disc-matches b{color:var(--foreground);font-weight:600;margin-right:3px}
 .ds-page .ds-toolbar .ds-input{height:32px;min-width:200px;flex:0 1 240px}
 .ds-page .ds-toolbar .ds-input input{height:30px;font-size:13px}
@@ -51,6 +51,7 @@
 .ds-viewseg button,.ds-view-ico{width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center}
 .ds-viewseg button svg{width:16px;height:16px}
 .my-vdiv{width:1px;height:20px;background:var(--border);margin:0 4px}
+.ds-page .disc-split{margin-top:8px}
 .disc-results-h{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:0 0 12px}
 .disc-results-h h3{font-size:16px;font-weight:600;letter-spacing:-.01em;margin:0}
 .disc-results-h .ds-table-meta{font-size:12px;color:var(--muted-foreground)}
@@ -91,7 +92,8 @@
 .ds-page .ds-table tbody tr:hover td.ds-sticky-l,.ds-page .ds-table tbody tr:hover td.ds-sticky-l2,.ds-page .ds-table tbody tr:hover td.ds-sticky-r{background:var(--slate-50)}
 .ds-page .ds-table .ds-sticky-l2,.ds-page .my-table thead th:nth-child(2),.ds-page .my-table tbody td:nth-child(2){border-right:1px solid var(--border);box-shadow:none}
 .ds-page .ds-table .ds-sticky-r,.ds-page .my-table thead th.my-act-th,.ds-page .my-table tbody td.my-act{border-left:1px solid var(--border);box-shadow:none}
-.ds-page .ds-table .ds-sticky-r{width:1%;min-width:0;text-align:right}
+.ds-page .ds-table th.ds-sticky-r,.ds-page .ds-table td.ds-sticky-r{width:140px;min-width:140px;max-width:140px;text-align:right}
+.ds-page .ds-table th.ds-sticky-r .my-th{justify-content:flex-end}
 .ds-page .my-table thead th.ds-cb,.ds-page .my-table thead th:nth-child(2),.ds-page .my-table thead th.my-act-th{background:var(--slate-50)}
 .ds-page .my-table tbody td.ds-cb,.ds-page .my-table tbody td:nth-child(2),.ds-page .my-table tbody td.my-act{background:#fff}
 .ds-page .my-table tbody tr:hover>td.ds-cb,.ds-page .my-table tbody tr:hover>td:nth-child(2),.ds-page .my-table tbody tr:hover>td.my-act{background:var(--slate-50)}
@@ -171,4 +173,100 @@
 .bulkm-opt{border:1px solid var(--border);border-radius:var(--r-md);background:#fff}
 .bulkm-opt:hover{background:var(--slate-50);border-color:var(--slate-300)}
 .bulkm-ico{background:var(--slate-100);color:var(--slate-700);border-radius:var(--r-md)}
+
+/* ══ Overrides of unlayered inline <style> blocks injected by app.js (need !important to win) ══ */
+/* Filter funnel button */
+.my-funnel,.ds-toolbar .ftip{width:32px!important;height:32px!important;border:1px solid var(--border)!important;border-radius:var(--r-md)!important;background:#fff!important;color:var(--slate-600)!important;box-shadow:var(--shadow-xs)}
+.my-funnel:hover,.ds-toolbar .ftip:hover{background:var(--slate-50)!important;border-color:var(--slate-300)!important;color:var(--foreground)!important}
+.my-funnel.is-on{background:var(--primary-soft)!important;border-color:var(--blue-200)!important;color:var(--blue-700)!important}
+.my-funnel svg{stroke:currentColor}
+.my-funnel b{background:var(--primary);color:var(--primary-foreground);top:-6px;right:-6px;min-width:16px;height:16px;line-height:16px;font-size:12px;font-weight:600}
+/* Add to button + menus */
+.addto-menu>summary.ds-btn{height:32px!important;padding:0 12px!important;border:1px solid var(--border)!important;border-radius:var(--r-md)!important;background:#fff!important;color:var(--foreground)!important;box-shadow:var(--shadow-xs)!important;width:auto!important;font-size:13px;font-weight:500;list-style:none}
+.addto-menu>summary.ds-btn:hover{background:var(--slate-50)!important;border-color:var(--slate-300)!important}
+.addto-menu>summary.ds-btn svg{stroke:currentColor!important;color:var(--slate-500)!important}
+.addto-menu[open]>summary.ds-btn{background:var(--slate-50)!important;border-color:var(--slate-300)!important}
+.ds-more-menu button{display:flex!important;flex-direction:row!important;align-items:center!important;gap:8px!important;height:32px;padding:0 8px;font-size:13px;border-radius:var(--r-sm)}
+.ds-more-menu button svg{stroke:currentColor!important;color:var(--slate-500)!important;width:16px;height:16px}
+.ds-more-menu{padding:4px}
+/* My creators table: keep strong text for primary cells, muted for meta */
+.ds-page .my-table thead th,.ds-page .my-table thead th *{color:var(--muted-foreground)!important;font-weight:500}
+.ds-page .my-table thead th svg{stroke:var(--slate-400)!important;color:var(--slate-400)!important}
+.ds-page .my-table thead .my-grp-btn:hover,.ds-page .my-table thead .my-grp-btn:hover *{color:var(--foreground)!important}
+.ds-page .my-table .ds-table-meta,.ds-page .my-table .my-plain small,.ds-page .my-table .my-auth small,.ds-page .my-table .ds-hcount{color:var(--muted-foreground)!important}
+.ds-page .my-table .my-link{color:var(--primary)!important}
+.ds-page .my-table .my-plain.is-muted,.ds-page .my-table .ds-cell-input::placeholder{color:var(--slate-500)!important}
+.ds-page .my-table .my-act summary,.ds-page .my-table .my-act summary *{color:var(--foreground)!important}
+.ds-page .my-table .my-act .ds-more>summary,.ds-page .my-table .my-act .ds-more>summary *{color:var(--slate-500)!important}
+.ds-page .my-table .my-act .addto-menu>summary.ds-btn,.ds-page .my-table .my-act .addto-menu>summary.ds-btn *{color:var(--foreground)!important}
+.ds-page .my-table .my-act .addto-menu>summary.ds-btn svg{color:var(--slate-500)!important}
+.ds-page .my-table .ds-chip{color:var(--slate-700)!important}
+.ds-page .my-table .ds-table-title{color:var(--foreground)!important;font-weight:600}
+.ds-page .my-table .ai-verdict.is-strong-fit,.ds-page .my-table .bf-score.is-good{color:var(--green-700)!important}
+.ds-page .my-table .ai-verdict.is-consider{color:var(--amber-700)!important}
+.ds-page .my-table .ai-verdict.is-avoid{color:var(--red-700)!important}
+.ds-page .my-table .ai-verdict.is-needs-data{color:var(--slate-600)!important}
+.ds-page .my-table .ds-badge--success{color:var(--green-700)!important}
+.ds-page .my-table .my-status{color:var(--slate-700)!important}
+.ai-verdict{height:24px;padding:0 8px;border:1px solid var(--border);border-radius:var(--r-sm);font-size:12px}
+.ai-verdict i{width:6px;height:6px}
+.ai-verdict.is-strong-fit{background:var(--green-50);border-color:var(--green-200)}
+.ai-verdict.is-consider{background:var(--amber-50);border-color:var(--amber-200)}
+.ai-verdict.is-avoid{background:var(--red-50);border-color:var(--red-200)}
+.ai-verdict.is-needs-data{background:var(--slate-50);border-color:var(--border)}
+.cons-pill{height:24px;align-items:center;padding:0 8px;border-radius:var(--r-sm);font-size:12px}
+.cons-pill.is-ok{background:var(--green-50);color:var(--green-700)}
+.cons-pill.is-warn{background:var(--amber-50);color:var(--amber-700)}
+.cons-pill.is-low{background:var(--red-50);color:var(--red-700)}
+.ds-page .my-table th.is-grp,.ds-page .my-table td.is-grp{background:transparent}
+.ds-page .my-table .my-grp-btn{font-weight:500}
+/* Selection bar */
+.ds-page .bulk-bar{background:var(--slate-50)!important;border:1px solid var(--border)!important;border-radius:var(--r-lg)!important;padding:8px 12px!important;color:var(--foreground)}
+.ds-page .bulk-bar .bb-l b{color:var(--foreground)}
+.ds-page .bulk-bar .bb-l span{color:var(--muted-foreground)}
+.ds-page .bulk-bar .bb-btn,.ds-page .bulk-bar .bb-clear{height:32px;padding:0 12px;background:#fff;border:1px solid var(--border);border-radius:var(--r-md);color:var(--foreground);font-size:13px;font-weight:500;box-shadow:var(--shadow-xs)}
+.ds-page .bulk-bar .bb-btn:hover{background:var(--slate-50);border-color:var(--slate-300);color:var(--foreground)}
+.ds-page .bulk-bar .bb-btn svg{color:var(--slate-500)!important;stroke:currentColor!important}
+.ds-page .bulk-bar .bb-btn.is-danger{color:var(--red-600)!important;border-color:var(--red-200)!important}
+.ds-page .bulk-bar .bb-btn.is-danger:hover{background:var(--red-50);border-color:var(--red-300)}
+.ds-page .bulk-bar .bb-btn.is-danger svg{color:var(--red-600)!important;stroke:currentColor!important}
+.ds-page .bulk-bar .bb-clear{color:var(--slate-600)!important;border-color:transparent!important;background:transparent!important;box-shadow:none}
+.ds-page .bulk-bar .bb-clear:hover{background:var(--slate-100)!important;color:var(--foreground)!important}
+.ds-page .bulk-bar .bb-sep{background:var(--border)}
+.ds-page .bulk-bar .addto-menu>summary.ds-btn{background:#fff!important;border:1px solid var(--border)!important;color:var(--foreground)!important}
+.ds-page .bulk-bar .addto-menu>summary.is-disabled{opacity:.5;color:var(--slate-500)!important}
+/* My creators advanced filters panel */
+.myf{width:288px;border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xs)}
+.myf-head{padding:16px;border-bottom:1px solid var(--border)}
+.myf-head strong{font-size:14px;font-weight:600}
+.myf-head span{color:var(--muted-foreground);font-size:12px}
+.myf-x{width:32px;height:32px;border:1px solid var(--border);border-radius:var(--r-md);color:var(--slate-600);box-shadow:var(--shadow-xs)}
+.myf-x:hover{background:var(--slate-50)}
+.myf-sec{padding:16px 0;border-bottom:1px solid var(--slate-100)}
+.myf-sec h4{font-size:13px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--foreground);margin:0 0 8px}
+.myf-seg button,.myf-chips button{height:28px;padding:0 10px;border:1px solid var(--border);border-radius:var(--r-md);background:#fff;color:var(--slate-700);font-size:13px;font-weight:500;box-shadow:var(--shadow-xs)}
+.myf-seg button:hover,.myf-chips button:hover{background:var(--slate-50);border-color:var(--slate-300)}
+.myf-seg button.on,.myf-chips button.on{border-color:var(--blue-200);background:var(--primary-soft);color:var(--blue-700);font-weight:500}
+.myf-select{height:36px;padding:0 10px;border:1px solid var(--input);border-radius:var(--r-md);color:var(--foreground);font-size:14px;box-shadow:var(--shadow-xs)}
+.myf-foot{padding:12px 16px;border-top:1px solid var(--border)}
+.myf-foot button{height:32px;padding:0 12px;border:1px solid var(--border);border-radius:var(--r-md);color:var(--foreground);font-size:13px;font-weight:500;box-shadow:var(--shadow-xs)}
+.myf-foot span{color:var(--muted-foreground);font-size:12px}
+/* Tags */
+.tg-cell .ds-chip{height:24px;padding:0 8px;background:var(--slate-50);font-weight:500;border-radius:var(--r-sm)}
+.tg-in{height:24px;border-radius:var(--r-sm);font-size:12px}
+.tg-in:hover{border-color:var(--border)}
+.tg-in:focus{border-color:var(--ring);box-shadow:0 0 0 3px color-mix(in srgb,var(--ring) 22%,transparent)}
+.tg-x{color:var(--slate-500)}
+.tg-x:hover{color:var(--foreground)}
+.tg-opt{padding:0 10px;height:32px;border-radius:var(--r-sm)}
+.tg-opt:hover{background:var(--slate-100)}
+.tg-clear{color:var(--primary)}
+/* Cards (My creators) */
+.my-card-grid{gap:16px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+.my-card{border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xs);padding:16px;gap:12px}
+.my-card:hover{border-color:var(--slate-300)}
+.my-card.is-selected{border-color:var(--primary);box-shadow:0 0 0 1px var(--primary) inset}
+.my-card-id b{font-size:14px;font-weight:600}
+.my-card-id span,.my-card-facts dt{color:var(--muted-foreground)!important;font-size:12px}
+.my-card-facts dd{font-size:14px;font-weight:500;font-variant-numeric:tabular-nums}
 }
