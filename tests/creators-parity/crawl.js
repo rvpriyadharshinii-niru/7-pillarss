@@ -27,15 +27,16 @@ const ENTRIES = {
   railpops: p => p.evaluate(() => { railPop('reqPop'); }),
 };
 async function runPath(which, entry, path) {
-  const page = await L.newPage(globalThis.B, which);
+  let page;
   try {
+    page = await L.newPage(globalThis.B, which);
     await ENTRIES[entry](page); await page.waitForTimeout(80);
     for (const k of path) { await L.enumerate(page); const r = await L.act(page, k); if (r !== 'ok') return { fail: r }; }
     const keys = await L.enumerate(page);
     const s = await L.snap(page);
     return { snap: s, keys, errs: page.__errs.slice() };
   } catch (e) { return { fail: 'ex:' + e.message.slice(0, 100), errs: page.__errs.slice() }; }
-  finally { await page.__ctx.close(); }
+  finally { if (page && page.__ctx) await page.__ctx.close().catch(() => {}); }
 }
 (async () => {
   await L.withBrowser(async B => {
@@ -53,8 +54,8 @@ async function runPath(which, entry, path) {
           const next = [];
           const jobs = [];
           for (const path of frontier) for (const k of (cur[path.join('>')] || {}).keys || []) jobs.push([...path, k]);
-          const res = await L.pool(jobs, 6, j => runPath(which, entry, j));
-          jobs.forEach((j, i) => { out[entry][which][j.join('>')] = res[i]; if (res[i].snap && (res[i].snap.layer || JSON.stringify(res[i].snap.st) !== JSON.stringify(base.snap.st))) next.push(j); });
+          const res = await L.pool(jobs, 4, j => runPath(which, entry, j));
+          jobs.forEach((j, i) => { out[entry][which][j.join('>')] = res[i]; if (res[i].snap && (res[i].snap.layer || res[i].snap.nOpen !== base.snap.nOpen || JSON.stringify(res[i].snap.st) !== JSON.stringify(base.snap.st))) next.push(j); });
           cur = out[entry][which];
           frontier = next;
         }

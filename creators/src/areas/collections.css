@@ -6,7 +6,7 @@
 .col-total{font-size:14px;font-weight:500;color:var(--muted-foreground)}
 
 /* cards */
-.col-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
+.col-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,320px),1fr));gap:16px}
 .col-card{gap:12px;min-width:0}
 .col-count{font-size:12px;font-weight:500;color:var(--muted-foreground);font-variant-numeric:tabular-nums}
 .col-name{appearance:none;background:none;border:0;padding:0;text-align:left;cursor:pointer;font-size:16px;font-weight:600;letter-spacing:-.01em;color:var(--foreground);line-height:1.35;border-radius:var(--r-sm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;max-width:100%}
@@ -66,4 +66,8 @@
 /* collection detail header */
 .ds-page-title .tip-inline{margin-left:4px}
 .tip-pop b{font-weight:600}
+}
+@layer area{
+.col-grid{align-items:stretch}
+.col-tier .ds-table-meta{white-space:normal;line-height:1.4}
 }

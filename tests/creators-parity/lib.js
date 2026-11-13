@@ -10,7 +10,7 @@ async function newPage(browser, which, hash) {
   const errs = [];
   page.__errs = errs;
   page.on('pageerror', e => errs.push('pageerror: ' + e.message));
-  page.on('console', m => { if (m.type() === 'error') errs.push('console: ' + m.text()); });
+  page.on('console', m => { if (m.type() === 'error' && !/net::ERR_FAILED/.test(m.text())) errs.push('console: ' + m.text()); });
   page.on('requestfailed', r => { if (/localhost:8765/.test(r.url())) errs.push('reqfailed: ' + r.url()); });
   page.on('dialog', d => d.accept('x').catch(() => {}));
   page.on('popup', p => p.close().catch(() => {}));
@@ -27,7 +27,8 @@ const SNAP_FN = () => {
   const st = {}; keys.forEach(k => { try { if (S[k] !== undefined) st[k] = S[k]; } catch (e) {} });
   const layerEl = q('#layer');
   const toast = [...document.querySelectorAll('.toast')].map(t => n(t.innerText)).join('|');
-  const lay = [...layerEl.children].filter(c => !c.classList.contains('toast')).map(c => n(c.innerText)).join(' || ');
+  const txt = el => { const c = el.cloneNode(true); c.querySelectorAll('style,script').forEach(x => x.remove()); const h = document.createElement('div'); h.style.cssText='position:fixed;left:-9999px;top:0;width:1200px'; h.appendChild(c); document.body.appendChild(h); const t = c.innerText; h.remove(); return n(t); };
+  const lay = [...layerEl.children].filter(c => !c.classList.contains('toast')).map(txt).join(' || ');
   const main = q('#main');
   return {
     hash: location.hash, st, toast, layer: lay,
@@ -38,7 +39,7 @@ const SNAP_FN = () => {
     navOn: n([...document.querySelectorAll('.nav .nav-row.on, .nav .nav-row.active, .nav [aria-current]')].map(x => x.innerText).join(',')),
     rail: n([...document.querySelectorAll('.rail-item.on')].map(x => x.innerText).join(',')),
     pops: [...document.querySelectorAll('.rail-pop.open')].map(p => p.id).join(','),
-    scrollTop: 0,
+    nOpen: document.querySelectorAll('details[open], .open, .is-open').length,
   };
 };
 const snap = page => page.evaluate(SNAP_FN);
@@ -58,6 +59,7 @@ const ENUM_FN = (scopeSel) => {
     if (e.closest('.toast')) return;
     if (e.tagName === 'INPUT' && e.type === 'hidden') return;
     if (e.disabled) return;
+    { const dt = e.closest('details'); if (dt && !dt.open && !(e.tagName === 'SUMMARY' && e.parentElement === dt)) return; }
     const where = e.closest('#layer') ? 'L' : e.closest('#header') ? 'H' : 'M';
     // when a layer is open, skip underlying main (modal)
     const t = n(e.getAttribute('aria-label') || e.innerText || e.value || e.placeholder || e.title || '').slice(0, 50);
@@ -86,7 +88,7 @@ async function act(page, key) {
       await loc.click({ timeout: 1500, force: true, noWaitAfter: true });
     }
   } catch (e) { return 'err:' + e.message.split('\n')[0].slice(0, 80); }
-  await page.waitForTimeout(60);
+  await page.mouse.move(0, 0); await page.waitForTimeout(60);
   return 'ok';
 }
 

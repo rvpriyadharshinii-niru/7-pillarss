@@ -408,4 +408,7 @@ a:hover{text-decoration:underline}
 .ds-empty{color:var(--muted-foreground)}
 .ds-btn[hidden],.btn[hidden],[hidden]{display:none}
 
+
+/* ── Floating 'Ask Adam' button must never cover content ── */
+.app>.body,#main{padding-bottom:88px}
 }

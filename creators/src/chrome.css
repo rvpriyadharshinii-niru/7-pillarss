@@ -1242,4 +1242,7 @@
 .rq-ov-link svg{color:#9ca3af}
 :root{--c-tbl-gap:4px}
 :root{--c-tbl-gap:8px}
+
+/* Restores the ORIGINAL type of the rail / side nav / popovers (the page font is Inter now; chrome stays as in the original) */
+.shell>.rail,.shell>aside.nav,.rail-pop{font-family:var(--c-font);font-size:13px;line-height:1.45}
 }
