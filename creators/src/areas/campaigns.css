@@ -427,7 +427,7 @@ svg [fill="#1e40af"]{fill:var(--primary)}
 .dk-widgets{margin-top:0!important}
 .dw-cell>.tv{display:flex;flex-direction:column}
 .dw-cell>.tv .tv-side{margin-top:auto}
-.dw-cell>.tv .tv-main{flex:0 0 auto}
+.dw-cell>.tv .tv-main{flex:1 1 auto;display:flex;flex-direction:column}
 .dw-cell>.tv>.tv-side{padding-top:16px}
 @media (min-width:1101px){.sv-rows{max-height:210px}}
 
@@ -470,5 +470,44 @@ svg [fill="#1e40af"]{fill:var(--primary)}
 
 
 .ds-page .cp-table .ds-sticky-l2{min-width:184px;max-width:184px}
+
+
+/* round 3 */
+.dk-widgets>*,.dk-widgets>.ds-card{margin:0!important}
+.dw-cell>.tv .tv-chart{flex:1 1 auto;display:flex;flex-direction:column;min-height:0}
+.dw-cell>.tv .tv-chart .tv-frame{flex:1 1 auto;height:auto;min-height:240px}
+@media (min-width:1101px){
+  .dk-shell>.dk-main.dw-grid>.dw-cell:has(.dk-sent){align-self:stretch!important}
+}
+.dk-sent{justify-content:center;align-items:flex-start}
+@media (max-width:1200px){.dk-insights .dk-ins-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+
+/* scroll affordance on every scrolling table wrap (right-edge shade appears only while more content is hidden) */
+#main:has(.camp-qa) .ds-table-wrap,#main:has(.dk-shell) .ds-table-wrap{
+  background:linear-gradient(to right,var(--card) 30%,transparent) left center/28px 100% local no-repeat,linear-gradient(to left,var(--card) 30%,transparent) right center/28px 100% local no-repeat,linear-gradient(to right,var(--slate-200),transparent) left center/10px 100% scroll no-repeat,linear-gradient(to left,var(--slate-200),transparent) right center/10px 100% scroll no-repeat}
+.ds-table-wrap{scrollbar-width:thin}
+
+/* campaign overview grid: uniform padding, even 4+3 */
+.cp-ov>.dk-ov-row{grid-template-columns:repeat(12,minmax(0,1fr))!important}
+.cp-ov .dk-ov-item{grid-column:span 3!important;border-left:1px solid var(--slate-100)}
+.cp-ov .dk-ov-item:nth-child(n+5){grid-column:span 4!important}
+.cp-ov .dk-ov-item:nth-child(5):nth-last-child(2),.cp-ov .dk-ov-item:nth-child(6):nth-last-child(1){grid-column:span 6!important}
+.cp-ov .dk-ov-item:nth-child(n+5):last-child:nth-child(5){grid-column:1/-1!important}
+.cp-ov .dk-ov-item>*{margin-left:8px;margin-right:8px}
+.cp-ov .dk-ov-item:nth-child(4n+1)>*{margin-left:20px}
+.cp-ov .dk-ov-item>.dk-ov-l{margin-top:8px}
+.cp-ov .dk-ov-item>b{margin-bottom:8px}
+.cp-ov .dk-ov-item:nth-child(4n+1){border-left:0}
+@media (max-width:760px){.cp-ov>.dk-ov-row{grid-template-columns:repeat(2,minmax(0,1fr))!important}.cp-ov .dk-ov-item,.cp-ov .dk-ov-item:nth-child(n+5){grid-column:span 1!important}}
+
+
+@media (min-width:1101px){
+  .dk-shell>.dk-main.dw-grid>.dw-cell:has(.dk-row2){grid-column:2/4!important}
+  .dk-shell>.dk-main.dw-grid>.dw-cell:has(.dk-sent){grid-column:1/-1!important;grid-row:4;align-self:stretch!important}
+  .dk-shell>.dk-main.dw-grid>.dw-cell:has(.dk-posts){grid-row:5}
+}
+.dk-sent{flex-direction:row!important;align-items:center!important;justify-content:space-between!important;padding:12px 20px!important;gap:16px!important;min-height:0}
+.dk-sent .sent-na{margin-left:auto}
+.dk-sent .dw-head{flex:0 1 auto}
 
 }
