@@ -80,3 +80,15 @@
 .col-bar+.ds-table-wrap .ds-table{table-layout:auto !important;width:max-content !important;min-width:100%}
 .col-bar+.ds-table-wrap td.col-note{width:160px;min-width:160px !important;max-width:160px !important}
 }
+@layer area{
+.col-bar+.ds-table-wrap td.col-note{width:110px;min-width:110px !important;max-width:110px !important}
+.col-bar+.ds-table-wrap .col-tier{min-width:120px !important;max-width:130px}
+.col-bar+.ds-table-wrap .col-tier .ds-table-meta{max-width:130px}
+.col-bar+.ds-table-wrap td,.col-bar+.ds-table-wrap th{padding-left:10px !important;padding-right:10px !important}
+.col-bar+.ds-table-wrap .col-acts{gap:4px}
+}
+@layer area{
+.col-bar+.ds-table-wrap td.col-note{width:96px;min-width:96px !important;max-width:96px !important}
+.col-bar+.ds-table-wrap .col-tier{min-width:150px !important;max-width:150px}
+.col-bar+.ds-table-wrap .col-tier .ds-table-meta{max-width:150px}
+}
