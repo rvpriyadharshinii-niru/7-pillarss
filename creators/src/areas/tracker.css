@@ -314,3 +314,16 @@
 .ac-foot>.ds-table-meta{margin-left:auto}
 .ac-foot>span{min-width:0}
 }
+@layer area{
+@media (max-width:640px){
+  .ac-card .ac-levels{overflow-x:auto;scroll-snap-type:x proximity}
+  .ac-card .ac-tab{flex:0 0 200px;scroll-snap-align:start}
+  .ac-card .ac-tab-tx b{overflow:visible;text-overflow:clip}
+  .ac-card .ac-bar--top{flex-wrap:wrap}
+  .ac-card .ac-bar--top>.ac-btn--view{flex:1 1 auto;min-width:0}
+  .ac-card .ac-bar--top>.ac-btn--stack{flex:1 1 100%;order:5;max-width:none}
+  .ac-card .ac-bar--top>.ac-spacer{display:none}
+  .ac-card .ac-bar--top>.ac-btn--icon,.ac-card .ac-bar--top>.ac-btn--outline{order:1}
+  .ac-card .ac-bar--sub>.ac-btn:first-of-type{margin-left:0}
+}
+}
