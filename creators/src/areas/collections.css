@@ -1,3 +1,138 @@
 @layer area{
-/* collections — page-specific visual rules. Tokens only (var(--slate-*), var(--primary)...), no raw hex. */
+/* collections — page-specific visual rules. Tokens only. !important is required where the
+   markup injects an unlayered <style> (COL_CSS / MK_CSS) that would otherwise win. */
+
+/* toolbar row (also used by table view, which has no injected style) */
+.col-bar{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.col-bar{padding:0 !important;margin:0 !important}
+.col-total{font-size:14px !important;font-weight:500 !important;color:var(--muted-foreground) !important}
+
+/* cards */
+.col-grid{display:grid !important;grid-template-columns:repeat(auto-fill,minmax(320px,1fr)) !important;gap:16px !important}
+.col-card{background:var(--card) !important;border:1px solid var(--border) !important;border-radius:var(--r-lg) !important;box-shadow:var(--shadow-xs);padding:20px !important;gap:12px !important;min-width:0}
+.col-card:hover{box-shadow:var(--shadow-sm)}
+.col-count{font-size:12px !important;font-weight:500 !important;color:var(--muted-foreground) !important;font-variant-numeric:tabular-nums}
+.col-name{font-size:16px !important;font-weight:600 !important;letter-spacing:-.01em;color:var(--foreground) !important;line-height:1.35 !important;border-radius:var(--r-sm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block !important;max-width:100%}
+.col-name:hover{text-decoration:none !important;color:var(--primary) !important}
+.col-name:focus-visible{outline:none !important;box-shadow:0 0 0 3px color-mix(in srgb,var(--ring) 22%,transparent)}
+.col-desc{font-size:14px !important;line-height:1.5 !important;color:var(--muted-foreground) !important;min-height:42px !important;margin:0 !important}
+.col-stats{margin-top:4px !important;padding:12px 0 !important;border-top:1px solid var(--slate-100);border-bottom:1px solid var(--slate-100);gap:12px !important}
+.col-stats span{font-size:12px !important;color:var(--muted-foreground) !important;font-weight:400}
+.col-stats b{font-size:14px !important;font-weight:600 !important;color:var(--foreground) !important;margin-top:4px !important;font-variant-numeric:tabular-nums;white-space:nowrap}
+.col-tier{min-width:0 !important;gap:6px !important}
+.col-tierbar{height:6px !important;gap:2px;background:var(--slate-100)}
+.col-tierbar i{border-radius:var(--r-sm);min-width:3px}
+.col-tierbar i[title^="Nano"]{background:var(--sky-500) !important}
+.col-tierbar i[title^="Micro"]{background:var(--blue-600) !important}
+.col-tierbar i[title^="Macro"]{background:var(--violet-500) !important}
+.col-tierbar i[title^="Mega"]{background:var(--amber-500) !important}
+.col-tier .ds-table-meta{font-size:12px;color:var(--muted-foreground)}
+
+/* avatar stack */
+.col-stack{min-height:32px !important;padding-left:8px}
+.col-stack .ds-avatar,.col-stack .col-more-n{width:28px !important;height:28px !important;border:2px solid var(--card) !important;margin-left:-8px !important;font-size:12px !important;font-weight:500 !important;box-sizing:content-box !important}
+.col-stack>*:first-child{margin-left:0 !important}
+.col-more-n{background:var(--slate-100) !important;color:var(--slate-600) !important;border-radius:999px}
+
+/* card footer actions */
+.col-foot{padding-top:16px !important;margin-top:auto;border-top:1px solid var(--slate-100) !important;gap:8px !important}
+.col-btns{flex-wrap:nowrap !important;gap:8px !important}
+.col-btns button{height:32px;display:inline-flex;align-items:center;padding:0 12px !important;font-size:13px !important;font-weight:500 !important;color:var(--foreground) !important;background:var(--card) !important;border:1px solid var(--input) !important;border-radius:var(--r-md) !important;box-shadow:var(--shadow-xs);transition:background .12s}
+.col-btns button:hover{background:var(--slate-50) !important;border-color:var(--slate-300) !important}
+.col-btns button:focus-visible{outline:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--ring) 22%,transparent)}
+.col-more>summary{width:32px;height:32px;padding:0 !important;display:inline-flex;align-items:center;justify-content:center;border-radius:var(--r-md);font-size:16px;line-height:1}
+.col-more>summary:focus-visible{outline:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--ring) 22%,transparent)}
+.col-more .ds-more-menu{background:var(--card);border:1px solid var(--border);border-radius:var(--r-md);box-shadow:var(--shadow-md);padding:4px;min-width:176px;z-index:30}
+.col-more .ds-more-menu button{font-size:14px;height:32px;padding:0 8px;border-radius:var(--r-sm);color:var(--foreground)}
+.col-more .ds-more-menu button:hover{background:var(--slate-100)}
+.col-more .ds-more-menu .col-danger{color:var(--red-700)}
+.col-more .ds-more-menu .col-danger:hover{background:var(--red-50)}
+.col-more[open]>summary{background:var(--slate-100) !important}
+
+/* table view */
+.col-bar+.ds-table-wrap th svg{display:none}
+.col-bar+.ds-table-wrap td,.col-bar+.ds-table-wrap th{padding-left:12px !important;padding-right:12px !important}
+.col-bar+.ds-table-wrap .col-tier{min-width:120px !important}
+.col-bar+.ds-table-wrap td,.col-bar+.ds-table-wrap th{white-space:nowrap}
+.col-bar+.ds-table-wrap td.col-note{white-space:normal;min-width:150px;max-width:170px !important;display:table-cell;overflow:hidden}
+.col-bar+.ds-table-wrap td.col-note{-webkit-line-clamp:2}
+.col-bar+.ds-table-wrap .ds-namebtn{font-weight:500;color:var(--foreground)}
+.col-bar+.ds-table-wrap .ds-namebtn:hover{color:var(--primary)}
+.col-acts{gap:8px;justify-content:flex-end;align-items:center}
+.col-acts .ds-btn{white-space:nowrap}
+.col-note{font-size:13px !important;color:var(--muted-foreground) !important;max-width:240px !important}
+.ds-table .col-tier{min-width:140px !important}
+.ds-table td .ds-table-meta{font-size:12px;color:var(--muted-foreground)}
+
+/* collection pills (move dialog) */
+.col-pill{font-size:12px !important;font-weight:500 !important;padding:2px 8px !important;border-radius:var(--r-sm) !important;border:1px solid var(--border)}
+.col-pill--live{background:var(--green-50) !important;color:var(--green-700) !important;border-color:var(--green-200)}
+.col-pill--off{background:var(--slate-50) !important;color:var(--slate-600) !important}
+
+/* move-to-campaign dialog */
+.col-mv-dlg{gap:12px}
+.col-mv-list{gap:8px !important;margin:0 !important;padding:2px !important}
+.col-mv-opt{border:1px solid var(--border) !important;border-radius:var(--r-md) !important;padding:12px 16px !important;gap:12px !important;align-items:center !important;background:var(--card);transition:background .12s,border-color .12s}
+.col-mv-opt:hover{background:var(--slate-50)}
+.col-mv-opt.is-on{border-color:var(--primary) !important;background:var(--primary-soft) !important;box-shadow:0 0 0 1px var(--primary)}
+.col-mv-opt input[type=radio]{margin:0;flex:none;accent-color:var(--primary);width:16px;height:16px;min-height:0 !important;padding:0 !important}
+.col-mv-body{gap:2px !important;min-width:0}
+.col-mv-title{font-size:14px;font-weight:500 !important;color:var(--foreground) !important}
+.col-mv-opt .ds-table-meta{font-size:12px !important;color:var(--muted-foreground) !important}
+.modal:has(:is(.col-mv-dlg,#newColName,.col-choice,#colCopyTarget,#colBriefTarget)) .ds-tabs{border-bottom:1px solid var(--border)}
+.modal:has(:is(.col-mv-dlg,#newColName,.col-choice,#colCopyTarget,#colBriefTarget)) #colMvCheck{font-size:13px !important;color:var(--muted-foreground) !important;margin:0 !important}
+
+/* dialogs: neutralise the nested ds-dlg card */
+.modal:has(:is(.col-mv-dlg,#newColName,.col-choice,#colCopyTarget,#colBriefTarget)) .ds-dlg,.modal:has(:is(.col-mv-dlg,#newColName,.col-choice,#colCopyTarget,#colBriefTarget)) .ds-dlg{border:0 !important;box-shadow:none !important;border-radius:0 !important;background:transparent !important;padding:0 !important}
+.modal:has(:is(.col-mv-dlg,#newColName,.col-choice,#colCopyTarget,#colBriefTarget)) .ds-form,.modal:has(:is(.col-mv-dlg,#newColName,.col-choice,#colCopyTarget,#colBriefTarget)) .ds-form{border:0 !important;box-shadow:none !important;padding:0 !important}
+/* dialogs opened from this area (create collection / move / manage) */
+.modal:has(:is(.col-mv-dlg,#newColName,.col-choice,#colCopyTarget,#colBriefTarget)),.modal:has(:is(.col-mv-dlg,#newColName,.col-choice,#colCopyTarget,#colBriefTarget)){border-radius:var(--r-lg) !important;box-shadow:var(--shadow-lg) !important;padding:0 !important;overflow:hidden}
+.modal:has(:is(.col-mv-dlg,#newColName,.col-choice,#colCopyTarget,#colBriefTarget))>h2,.modal:has(:is(.col-mv-dlg,#newColName,.col-choice,#colCopyTarget,#colBriefTarget))>h2{margin:0 !important;padding:20px 56px 16px 24px;font-size:16px !important;font-weight:600 !important;letter-spacing:-.01em;border-bottom:1px solid var(--border)}
+.modal:has(:is(.col-mv-dlg,#newColName,.col-choice,#colCopyTarget,#colBriefTarget)) .mk-x,.modal:has(:is(.col-mv-dlg,#newColName,.col-choice,#colCopyTarget,#colBriefTarget)) .mk-x{top:14px !important;right:16px !important;color:var(--muted-foreground) !important}
+.modal:has(:is(.col-mv-dlg,#newColName,.col-choice,#colCopyTarget,#colBriefTarget)) .mk-x:hover,.modal:has(:is(.col-mv-dlg,#newColName,.col-choice,#colCopyTarget,#colBriefTarget)) .mk-x:hover{background:var(--slate-100) !important;color:var(--foreground) !important}
+.modal:has(:is(.col-mv-dlg,#newColName,.col-choice,#colCopyTarget,#colBriefTarget)) .mk-body,.modal:has(:is(.col-mv-dlg,#newColName,.col-choice,#colCopyTarget,#colBriefTarget)) .mk-body{margin:0 !important;padding:16px 24px 20px}
+.modal:has(:is(.col-mv-dlg,#newColName,.col-choice,#colCopyTarget,#colBriefTarget)) .mk-body .ds-caption,.modal:has(:is(.col-mv-dlg,#newColName,.col-choice,#colCopyTarget,#colBriefTarget)) .mk-body .ds-caption{color:var(--muted-foreground) !important;font-size:14px !important}
+.modal:has(:is(.col-mv-dlg,#newColName,.col-choice,#colCopyTarget,#colBriefTarget)) .modal-foot,.modal:has(:is(.col-mv-dlg,#newColName,.col-choice,#colCopyTarget,#colBriefTarget)) .modal-foot{margin:0 !important;padding:16px 24px !important;border-top:1px solid var(--border);background:var(--slate-50)}
+.modal:has(:is(.col-mv-dlg,#newColName,.col-choice,#colCopyTarget,#colBriefTarget)) .modal-foot .ds-btn,.modal:has(:is(.col-mv-dlg,#newColName,.col-choice,#colCopyTarget,#colBriefTarget)) .modal-foot .ds-btn{height:36px !important;min-width:0 !important;padding:0 16px !important;font-size:14px !important;font-weight:500 !important}
+.modal:has(:is(.col-mv-dlg,#newColName,.col-choice,#colCopyTarget,#colBriefTarget)) .modal-foot .ds-btn--outline,.modal:has(:is(.col-mv-dlg,#newColName,.col-choice,#colCopyTarget,#colBriefTarget)) .modal-foot .ds-btn--outline{border-color:var(--input) !important;background:var(--card) !important}
+.modal:has(:is(.col-mv-dlg,#newColName,.col-choice,#colCopyTarget,#colBriefTarget)) .modal-foot .ds-btn--primary,.modal:has(:is(.col-mv-dlg,#newColName,.col-choice,#colCopyTarget,#colBriefTarget)) .modal-foot .ds-btn--primary{background:var(--primary) !important;border-color:var(--primary) !important}
+.modal:has(:is(.col-mv-dlg,#newColName,.col-choice,#colCopyTarget,#colBriefTarget)) .modal-foot .ds-btn--primary:hover:not([disabled]),.modal:has(:is(.col-mv-dlg,#newColName,.col-choice,#colCopyTarget,#colBriefTarget)) .modal-foot .ds-btn--primary:hover{background:var(--primary-hover) !important}
+.modal:has(:is(.col-mv-dlg,#newColName,.col-choice,#colCopyTarget,#colBriefTarget)) .modal-foot .ds-btn--primary[disabled]{opacity:.5}
+#newColName,#newColDesc{border:1px solid var(--input) !important;border-radius:var(--r-md) !important;height:36px !important;min-height:36px;padding:0 12px !important;font-size:14px !important}
+#newColDesc{height:auto !important;min-height:88px !important;padding:8px 12px !important}
+#newColName:focus,#newColDesc:focus{border-color:var(--ring) !important;box-shadow:0 0 0 3px color-mix(in srgb,var(--ring) 22%,transparent) !important;outline:none}
+.modal:has(:is(.col-mv-dlg,#newColName,.col-choice,#colCopyTarget,#colBriefTarget)) label.ds-field span{font-size:14px !important;font-weight:500 !important}
+.modal:has(:is(.col-mv-dlg,#newColName,.col-choice,#colCopyTarget,#colBriefTarget)) label.ds-field span span{color:var(--muted-foreground)}
+
+/* collection detail header */
+.ds-crumb{padding-left:0 !important}
+.ds-page-title .tip-inline{margin-left:4px}
+.tip-i{border:1px solid var(--slate-300) !important;color:var(--slate-500) !important;background:var(--card) !important}
+.tip-i:hover{background:var(--slate-100) !important;color:var(--foreground) !important}
+.tip-pop{border:1px solid var(--border) !important;border-radius:var(--r-lg) !important;box-shadow:var(--shadow-md) !important;font-family:inherit !important;color:var(--foreground) !important}
+.tip-pop b{font-weight:600}
+.tip-pop p{color:var(--muted-foreground)}
+.tip-f button{height:32px;border:1px solid var(--input) !important;border-radius:var(--r-md) !important;color:var(--foreground) !important;font-weight:500}
+.tip-f .tip-ok{background:var(--primary) !important;border-color:var(--primary) !important;color:var(--background) !important}
+.tip-x{color:var(--muted-foreground) !important}
+}
+@layer area{
+.col-bar+.ds-table-wrap th:last-child,.col-bar+.ds-table-wrap td:last-child{position:sticky;right:0;background:var(--card);box-shadow:-1px 0 0 var(--slate-100)}
+.col-bar+.ds-table-wrap th:last-child{background:var(--slate-50)}
+.col-bar+.ds-table-wrap tr:hover td:last-child{background:var(--slate-50)}
+}
+
+@layer area{
+.modal:has(.col-choice) .ds-check{display:flex;align-items:center;gap:12px;padding:8px 4px;border-radius:var(--r-sm);cursor:pointer}
+.modal:has(.col-choice) .ds-check:hover{background:var(--slate-50)}
+.modal:has(.col-choice) .ds-check>span{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--foreground) !important}
+.modal:has(.col-choice) .ds-check input{width:16px;height:16px;min-height:0 !important;padding:0 !important;margin:0;accent-color:var(--primary);flex:none}
+.modal:has(.col-choice) .ds-avatar{flex:none;font-size:12px;overflow:hidden}
+.modal:has(.col-choice) .ds-form{max-height:min(360px,46vh);overflow:auto}
+.modal:has(.col-choice) .ds-dlg>.ds-caption{font-weight:500;color:var(--foreground) !important}
+}
+@layer area{
+.modal:has(.col-choice) .ds-check{min-height:0 !important;margin:0 !important;padding:6px 4px !important}
+.col-bar~p.ds-caption{margin:0;padding:48px 24px;text-align:center;font-size:14px;color:var(--muted-foreground);border:1px dashed var(--border);border-radius:var(--r-lg);background:var(--slate-50)}
+.col-grid>p.ds-caption{grid-column:1/-1;margin:0;padding:48px 24px;text-align:center;font-size:14px;color:var(--muted-foreground);border:1px dashed var(--border);border-radius:var(--r-lg);background:var(--slate-50)}
 }
