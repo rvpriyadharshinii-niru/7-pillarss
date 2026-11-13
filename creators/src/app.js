@@ -1327,7 +1327,7 @@ function limitedDetail(){const id=detailId(); const c=id?crOf(id):null; return !
 function evaluateCreatorNow(id){const c=crOf(id); if(!c)return; if(!isInMy(id))addToCreator(id,'my'); MYC[id]={...(MYC[id]||{}),auth:60+avHash(id)%36}; paintBody(); toast(`${c.name} evaluated`);}
 function unevaluatedCtas(c){return isInMy(c.id)?`<button class="ds-btn ds-btn--primary" onclick="closeLayer();evaluateCreatorNow('${c.id}')">Evaluate</button>`:`<button class="ds-btn ds-btn--primary" onclick="closeLayer();addToCreator('${c.id}','my')">Add to my creators</button>`;}
 
-const SH_CSS=`
+const SH_CSS=`@layer legacy{
 .sh-wrap{padding:0 24px 28px;color:#0f172a}
 .sh-visit{display:flex;align-items:center;gap:12px;margin-top:20px;padding-bottom:20px;border-bottom:1px solid #e2e8f0}
 .sh-visit-t{min-width:0;flex:1;display:flex;flex-direction:column}
@@ -1357,7 +1357,7 @@ const SH_CSS=`
 .sh-part{display:flex;gap:12px;align-items:flex-start;padding:14px 0;border-bottom:1px solid #e2e8f0}
 .sh-part b{display:block;font-size:14px;font-weight:600;color:#0f172a}
 .sh-part p{margin:2px 0 0;font-size:13px;color:#0f172a;line-height:1.5}
-`;
+}`;
 const SH_I={
  users:'<circle cx="9" cy="8" r="3.5"/><path d="M2 20a7 7 0 0 1 14 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M22 20a7 7 0 0 0-4-6.3"/>',
  eye:'<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
@@ -2239,7 +2239,7 @@ function discApply(){
   if(S.advScope!=='my') S.discDb=d.db;
   S[K.d]=null; paintBody();
 }
-const MY_TOOL_CSS=`
+const MY_TOOL_CSS=`@layer legacy{
 
 .my-funnel{position:relative;display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border:1px solid #bfdbfe;border-radius:8px;background:#ffffff;color:#1e40af;cursor:pointer;flex:none}
 .my-funnel:hover{border-color:#1d4ed8;color:#1d4ed8}
@@ -2300,17 +2300,17 @@ td.is-grp{background:#eff6ff}
 .my-table .my-grp-btn svg{stroke:#0f172a}
 
 /* My creators table: force ink text, no grey anywhere in the table */
-.ds-page .my-table, .ds-page .my-table *{color:#0f172a !important}
-.ds-page .my-table .my-grp-btn:hover{color:#1d4ed8 !important}
-.ds-page .my-table .my-plain.is-muted{color:#1d4ed8 !important}
+.ds-page .my-table, .ds-page .my-table *{color:#0f172a}
+.ds-page .my-table .my-grp-btn:hover{color:#1d4ed8}
+.ds-page .my-table .my-plain.is-muted{color:#1d4ed8}
 
 /* Controls: bordered Add to, one-line menu items, clear filter button */
-.addto-menu>summary.ds-btn{border:1px solid #1d4ed8 !important;background:#ffffff !important;color:#1d4ed8 !important;border-radius:8px !important}
-.addto-menu>summary.ds-btn svg{color:#1d4ed8 !important;stroke:#1d4ed8 !important}
+.addto-menu>summary.ds-btn{border:1px solid #1d4ed8;background:#ffffff;color:#1d4ed8;border-radius:8px}
+.addto-menu>summary.ds-btn svg{color:#1d4ed8;stroke:#1d4ed8}
 .ds-more-menu button{display:flex !important;flex-direction:row !important;align-items:center !important;gap:10px !important;white-space:nowrap}
-.ds-more-menu button svg{flex:none;color:#1d4ed8 !important;stroke:#1d4ed8 !important}
-.my-funnel{width:38px;height:38px;border:1px solid #1d4ed8 !important;background:#eff6ff !important;color:#1d4ed8 !important;border-radius:8px !important}
-.my-funnel:hover{background:#dbeafe !important}
+.ds-more-menu button svg{flex:none;color:#1d4ed8;stroke:#1d4ed8}
+.my-funnel{width:38px;height:38px;border:1px solid #1d4ed8;background:#eff6ff;color:#1d4ed8;border-radius:8px}
+.my-funnel:hover{background:#dbeafe}
 .my-funnel svg{stroke:#1d4ed8}
 
 /* Selection bar: white, matching the filter toolbar above it */
@@ -2326,8 +2326,8 @@ td.is-grp{background:#eff6ff}
 .ds-page .bulk-bar .bb-btn.is-danger svg{color:#b91c1c;stroke:#b91c1c}
 .ds-page .bulk-bar .bb-clear{color:#1d4ed8;border-color:#bfdbfe}
 .ds-page .bulk-bar .bb-sep{background:#bfdbfe}
-.ds-page .bulk-bar .addto-menu>summary.ds-btn{background:#ffffff !important;border:1px solid #1d4ed8 !important;color:#1d4ed8 !important}
-.ds-page .bulk-bar .addto-menu>summary.is-disabled{opacity:.5;border-color:#bfdbfe !important;color:#64748b !important}
+.ds-page .bulk-bar .addto-menu>summary.ds-btn{background:#ffffff;border:1px solid #1d4ed8;color:#1d4ed8}
+.ds-page .bulk-bar .addto-menu>summary.is-disabled{opacity:.5;border-color:#bfdbfe;color:#64748b}
 
 .my-funnel{position:relative;display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;padding:0;border:1px solid #1d4ed8;border-radius:8px;background:#ffffff;color:#1d4ed8;cursor:pointer;flex:none}
 .my-funnel:hover,.my-funnel.is-on{background:#eff6ff}
@@ -2341,7 +2341,7 @@ td.is-grp{background:#eff6ff}
 .my-table thead .my-grp-btn:hover{color:#1d4ed8}
 .my-table thead .my-grp-btn svg{stroke:#1d4ed8}
 .my-table th.is-grp,.my-table td.is-grp{background:transparent}
-`;
+}`;
 function myAdvBtnHTML(){ const n=myAdvCount(S.myAdv); const fun='<path d="M3 4h18l-7 8.5V19l-4 2v-8.5z"/>'; return `<style>@layer legacy{${MY_TOOL_CSS}${MYF_CSS}}</style><button type="button" class="my-funnel ftip${S.myAdvOpen?' is-on':''}" onclick="openMyAdvanced()" data-tip="Advanced filters" aria-label="Advanced filters${n?', '+n+' active':''}">${discSvg(fun,16)}${n?`<b>${n}</b>`:''}</button>`; }
 function openMyAdvanced(){ S.advScope='my'; S.myAdvOpen=!S.myAdvOpen; S.myAdvDraft=null; paintBody(); }
 function closeAdvPanel(){ if(S.advScope==='my') openMyAdvanced(); else openDiscAdvanced(); }
@@ -2425,7 +2425,7 @@ function myAdvRepaint(){ const b=document.querySelector('.myf-body'), sc=b?b.scr
 function myAdvSet(k,v){ S.myAdv={...MY_ADV_EMPTY,...(S.myAdv||{}),[k]:v}; myAdvRepaint(); }
 function myAdvToggle(k,v){ const a={...MY_ADV_EMPTY,...(S.myAdv||{})}; const cur=[...(a[k]||[])]; const i=cur.indexOf(v); if(i>=0) cur.splice(i,1); else cur.push(v); S.myAdv={...a,[k]:cur}; myAdvRepaint(); }
 function myAdvReset(){ S.myAdv={...MY_ADV_EMPTY}; myAdvRepaint(); }
-const MYF_CSS=`
+const MYF_CSS=`@layer legacy{
 .myf{width:272px;flex:none;background:#ffffff;border:1px solid #bfdbfe;border-radius:12px;display:flex;flex-direction:column;overflow:hidden;align-self:flex-start}
 .myf-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:14px 16px;border-bottom:1px solid #e2e8f0}
 .myf-head strong{display:block;font-size:14px;color:#0f172a}
@@ -2445,7 +2445,7 @@ const MYF_CSS=`
 .myf-foot button{padding:8px 12px;border:1px solid #bfdbfe;border-radius:8px;background:#ffffff;color:#0f172a;font:inherit;font-size:13px;cursor:pointer}
 .myf-foot span{font-size:13px;color:#0f172a}
 
-.ftip{position:relative}.ftip:hover::after,.ftip:focus-visible::after{content:attr(data-tip);position:absolute;top:calc(100% + 8px);left:50%;transform:translateX(-50%);background:#0f172a;color:#ffffff;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:12px;font-weight:500;line-height:1;padding:7px 9px;border-radius:6px;white-space:nowrap;z-index:60;pointer-events:none}`;
+.ftip{position:relative}.ftip:hover::after,.ftip:focus-visible::after{content:attr(data-tip);position:absolute;top:calc(100% + 8px);left:50%;transform:translateX(-50%);background:#0f172a;color:#ffffff;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:12px;font-weight:500;line-height:1;padding:7px 9px;border-radius:6px;white-space:nowrap;z-index:60;pointer-events:none}}`;
 function myAdvPanelHTML(){
   const a={...MY_ADV_EMPTY,...(S.myAdv||{})}, n=myAdvCount(a);
   const count=DISC.filter(c=>!c.repo&&myAdvMatch(c,a)).length;
