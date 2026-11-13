@@ -76605,7 +76605,8 @@ a:hover{text-decoration:underline}
 .ds-btn--icon.is-on,.ds-toolbar .ftip.is-on,.ds-toolbar .ftip[aria-expanded=true],.my-funnel.is-on{background:var(--primary-soft);border-color:var(--blue-200);color:var(--blue-700)}
 .my-funnel svg{stroke:currentColor}
 .my-funnel b{background:var(--primary);color:var(--primary-foreground);top:-6px;right:-6px;min-width:16px;height:16px;line-height:16px;font-size:var(--fs-xs);font-weight:600}
-.ds-btn[disabled],.btn[disabled],.ds-btn.is-disabled,.ds-pager button:disabled,.dk-per-step:disabled{opacity:.5;pointer-events:none}
+.ds-btn[disabled],.btn[disabled],.ds-pager button:disabled,.dk-per-step:disabled{opacity:.5;pointer-events:none}
+.ds-btn.is-disabled{opacity:.5;cursor:not-allowed}  /* stays clickable: the app shows an explanatory toast */
 .ac-check{cursor:pointer}
 .ac-check:focus-within{border-color:var(--ring);box-shadow:var(--ring-shadow)}
 .ac-check input{width:16px;height:16px;margin:0}
@@ -76763,6 +76764,7 @@ a:hover{text-decoration:underline}
 .ds-ov-chev,.dk-acc-chev,.ds-ov-mini-ico{color:var(--slate-500)}
 .ds-ov-mini-item b,.dk-mini-item b{font-weight:600;color:var(--foreground)}
 .dk-mini{display:flex;align-items:center;gap:var(--sp-4);margin-left:auto;font-size:var(--fs-sm);color:var(--slate-600)}
+.dk-acc[open] .dk-mini,.dk-ov[open] .dk-mini,.cp-ov[open] .dk-mini,.ds-overview[open] .ds-ov-mini{display:none}  /* summary row only while collapsed */
 .dk-mini-item{display:inline-flex;align-items:baseline;gap:4px}
 .dk-mini-item svg{align-self:center;color:var(--slate-400)}
 .dk-mini-item small{font-size:var(--fs-xs)}
@@ -77415,7 +77417,7 @@ svg [fill="#1e40af"]{fill:var(--primary)}
 .cp-table .cp-prog,.cp-table .cp-spend{min-width:0!important;width:136px}
 .cp-table .cp-prog-txt{white-space:normal;line-height:1.35}
 .cp-table .cp-creators{gap:6px}
-.cp-table .cp-creators .ds-table-meta{display:none}
+.cp-table .cp-creators .ds-table-meta{display:inline;color:var(--slate-500);font-size:12px;white-space:nowrap}
 .cp-table td:nth-child(6){width:1%}
 
 
@@ -78233,8 +78235,8 @@ button.msd-camp:hover span:first-child{color:var(--primary)}
 .ac-card .ac-tab-caret,.ac-card .ac-tab-x{display:grid;place-items:center;flex:none;width:24px;height:24px;padding:0;border:0;border-radius:var(--r-sm);background:transparent;color:var(--slate-500);cursor:pointer}
 .ac-card .ac-tab-caret:hover,.ac-card .ac-tab-x:hover{background:var(--slate-100);color:var(--foreground)}
 .ac-card .ac-tab-caret svg,.ac-card .ac-tab-x svg{width:14px;height:14px}
-.ac-card .ac-tab-x{position:static;opacity:0;width:0;margin-left:-8px;overflow:hidden;pointer-events:none}
-.ac-card .ac-tab:hover .ac-tab-x,.ac-card .ac-tab:focus-within .ac-tab-x{opacity:1;width:24px;margin-left:0;pointer-events:auto}
+.ac-card .ac-tab-x{position:static;opacity:0;pointer-events:none}  /* width reserved: the caret must not shift on hover */
+.ac-card .ac-tab:hover .ac-tab-x,.ac-card .ac-tab:focus-within .ac-tab-x{opacity:1;pointer-events:auto}
 .ac-card .ac-tab-add{align-self:center;display:grid;place-items:center;flex:none;width:32px;height:32px;margin:0;padding:0;border:1px dashed var(--slate-300);border-radius:var(--r-md);background:transparent;color:var(--slate-600);cursor:pointer}
 .ac-card .ac-tab-add:hover{background:var(--surface);border-color:var(--slate-400);color:var(--foreground)}
 .ac-card .ac-tab-add svg{width:16px;height:16px}

@@ -71,8 +71,8 @@
 .ac-card .ac-tab-caret,.ac-card .ac-tab-x{display:grid;place-items:center;flex:none;width:24px;height:24px;padding:0;border:0;border-radius:var(--r-sm);background:transparent;color:var(--slate-500);cursor:pointer}
 .ac-card .ac-tab-caret:hover,.ac-card .ac-tab-x:hover{background:var(--slate-100);color:var(--foreground)}
 .ac-card .ac-tab-caret svg,.ac-card .ac-tab-x svg{width:14px;height:14px}
-.ac-card .ac-tab-x{position:static;opacity:0;width:0;margin-left:-8px;overflow:hidden;pointer-events:none}
-.ac-card .ac-tab:hover .ac-tab-x,.ac-card .ac-tab:focus-within .ac-tab-x{opacity:1;width:24px;margin-left:0;pointer-events:auto}
+.ac-card .ac-tab-x{position:static;opacity:0;pointer-events:none}  /* width reserved: the caret must not shift on hover */
+.ac-card .ac-tab:hover .ac-tab-x,.ac-card .ac-tab:focus-within .ac-tab-x{opacity:1;pointer-events:auto}
 .ac-card .ac-tab-add{align-self:center;display:grid;place-items:center;flex:none;width:32px;height:32px;margin:0;padding:0;border:1px dashed var(--slate-300);border-radius:var(--r-md);background:transparent;color:var(--slate-600);cursor:pointer}
 .ac-card .ac-tab-add:hover{background:var(--surface);border-color:var(--slate-400);color:var(--foreground)}
 .ac-card .ac-tab-add svg{width:16px;height:16px}

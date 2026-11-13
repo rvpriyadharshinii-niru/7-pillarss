@@ -70,7 +70,7 @@ const S = {
   },
   'MY13 quick view side sheet -> full profile -> 6 tabs -> back keeps filter/selection': async a => {
     await a.setPage('creators'); await a.fillA('Search by handle', 'a'); await a.A('Select Kylie'); const r0 = await rows(a);
-    await a.C('Kylie', '#main tbody'); a.obs('quick', await a.lay(600)); a.obs('quick st', await a.st()); await a.C('Open profile', '#layer'); a.obs('profile', { st: await a.st(), h: (await a.snap()).header.slice(0, 200) });
+    await a.p.locator('#main tbody').getByText('Kylie', { exact: true }).first().click(); await a.p.waitForTimeout(150); a.obs('quick', await a.lay(600)); a.obs('quick st', await a.st()); await a.C('Open profile', '#layer'); a.obs('profile', { st: await a.st(), h: (await a.snap()).header.slice(0, 200) });
     for (let i = 0; i < 6; i++) { await a.p.locator('#header button', { hasText: ['Overview', 'Content', 'Content Performance', 'Evaluated Reports', 'Collaborations', 'Audience'][i] }).first().click(); await a.p.waitForTimeout(120); a.obs('tab' + i, { st: (await a.st()).tab, hash: (await a.st()).hash, m: await a.m(250) }); }
     await a.C('My creators', '#header .crumb, #main .crumb'); a.obs('back', { st: await a.st(), q: await a.ev(() => document.querySelector('[aria-label="Search by handle"]').value), rows: await rows(a), sel: await a.ev(() => S.mySel) }); a.expect('rows kept', await rows(a), r0);
   },

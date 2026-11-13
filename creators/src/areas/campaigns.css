@@ -465,7 +465,7 @@ svg [fill="#1e40af"]{fill:var(--primary)}
 .cp-table .cp-prog,.cp-table .cp-spend{min-width:0!important;width:136px}
 .cp-table .cp-prog-txt{white-space:normal;line-height:1.35}
 .cp-table .cp-creators{gap:6px}
-.cp-table .cp-creators .ds-table-meta{display:none}
+.cp-table .cp-creators .ds-table-meta{display:inline;color:var(--slate-500);font-size:12px;white-space:nowrap}
 .cp-table td:nth-child(6){width:1%}
 
 

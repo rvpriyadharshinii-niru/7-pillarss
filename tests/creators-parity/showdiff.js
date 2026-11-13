@@ -1,0 +1,3 @@
+// usage: node showdiff.js <tag> : prints first differing region for every PARITY mismatch in /tmp/claude-0/scen-<tag>.json
+const L=require('./lib');const r=require('/tmp/claude-0/scen-'+process.argv[2]+'.json');
+for(const k in r){const o=r[k].orig.obs,n=r[k].neu.obs;for(let i=0;i<Math.max(o.length,n.length);i++){const a=o[i],b=n[i];if(a&&b&&a[0]===b[0]&&!L.same(a[1],b[1])){const A=JSON.stringify(a[1]).replace(/ /g,''),B=JSON.stringify(b[1]).replace(/ /g,'');let j=0;while(j<A.length&&A[j]===B[j])j++;console.log(k.slice(0,6),a[0].slice(0,25),'@'+j,'\n   O:',A.slice(Math.max(0,j-30),j+90),'\n   N:',B.slice(Math.max(0,j-30),j+90));}}}
