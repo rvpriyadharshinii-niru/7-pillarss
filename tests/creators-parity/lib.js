@@ -88,7 +88,7 @@ async function act(page, key) {
     } else if (info.tag === 'INPUT' && ['date', 'time'].includes(info.type)) {
       await loc.fill(info.type === 'date' ? '2026-11-20' : '10:00', { timeout: 1500 });
     } else {
-      await loc.click({ timeout: 1500, force: true, noWaitAfter: true });
+      await loc.click({ timeout: 1500, noWaitAfter: true });
     }
   } catch (e) { return 'err:' + e.message.split('\n')[0].slice(0, 80); }
   await page.mouse.move(0, 0); await page.waitForTimeout(60);

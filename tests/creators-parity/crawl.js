@@ -54,7 +54,7 @@ async function runPath(which, entry, path) {
           const next = [];
           const jobs = [];
           for (const path of frontier) for (const k of (cur[path.join('>')] || {}).keys || []) jobs.push([...path, k]);
-          const res = await L.pool(jobs, 4, j => runPath(which, entry, j));
+          const res = await L.pool(jobs, 3, j => runPath(which, entry, j));
           jobs.forEach((j, i) => { out[entry][which][j.join('>')] = res[i]; if (res[i].snap && (res[i].snap.layer || res[i].snap.nOpen !== base.snap.nOpen || JSON.stringify(res[i].snap.st) !== JSON.stringify(base.snap.st))) next.push(j); });
           cur = out[entry][which];
           frontier = next;

@@ -71,3 +71,8 @@
 .col-grid{align-items:stretch}
 .col-tier .ds-table-meta{white-space:normal;line-height:1.4}
 }
+@layer area{
+.col-bar+.ds-table-wrap td.col-note{width:200px;min-width:200px !important;max-width:200px !important;display:table-cell;overflow:hidden;text-overflow:ellipsis;white-space:nowrap !important}
+.col-bar+.ds-table-wrap .col-tier .ds-table-meta{white-space:nowrap !important;overflow:hidden;text-overflow:ellipsis;max-width:160px}
+.col-bar+.ds-table-wrap .col-tier{min-width:140px !important;max-width:160px}
+}

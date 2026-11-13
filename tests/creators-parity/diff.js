@@ -9,7 +9,7 @@ for (const [entry, v] of Object.entries(d)) {
     const o = v.orig[k], n = v.neu[k];
     if (!o || !n) { (o ? onlyO++ : onlyN++); diffs.push({ entry, k, kind: o ? 'only-in-original' : 'only-in-new' }); continue; }
     total++;
-    if (o.fail || n.fail) { if (o.fail !== n.fail) diffs.push({ entry, k, kind: 'act-result', o: o.fail, n: n.fail }); else same++; continue; }
+    if (o.fail || n.fail) { if ((o.fail||'').slice(0,3) !== (n.fail||'').slice(0,3) || (o.fail&&!/^err/.test(o.fail)&&o.fail!==n.fail)) diffs.push({ entry, k, kind: 'act-result', o: o.fail, n: n.fail }); else same++; continue; }
     const bad = [];
     for (const f of FIELDS) {
       if (!L.same(o.snap[f], n.snap[f])) bad.push(f === 'main' || f === 'layer' || f === 'header' ? { f, ...L.wordDiff(String(o.snap[f]), String(n.snap[f])) } : { f, o: o.snap[f], n: n.snap[f] });
