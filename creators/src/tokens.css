@@ -109,4 +109,14 @@
   /* legacy token names, re-pointed at the design system so every var(--old) lands on a DS value */
   --r-card:var(--r-lg); --r-ctl:var(--r-md); --r-frame:var(--r-xl); --shadow-pop:var(--shadow-lg);
   --canvas:var(--slate-100);
+  /* surfaces, overlays, focus */
+  --surface:var(--card); --surface-muted:var(--slate-50);
+  --scrim:color-mix(in srgb,var(--slate-950) 45%,transparent);
+  --ring-shadow:0 0 0 3px color-mix(in srgb,var(--ring) 22%,transparent);
+  /* control heights (default 36, toolbars/small 32) */
+  --control-h:36px; --control-h-sm:32px;
+  /* type scale */
+  --fs-xs:12px; --fs-sm:13px; --fs-base:14px; --fs-lg:16px; --fs-xl:20px; --fs-2xl:24px; --fs-3xl:30px;
+  /* spacing scale (4px grid) */
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px; --sp-6:32px;
 }
