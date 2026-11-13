@@ -41,7 +41,7 @@ function railPopClose(){ document.querySelectorAll('.rail-pop.open').forEach(p=>
 function railPop(id){
   const el=document.getElementById(id); if(!el) return;
   const open=el.classList.contains('open'); railPopClose();
-  if(!open){ el.classList.add('open'); if(id==='brandPop') railBrandList(); if(id==='reqPop'){ reqOvRender(); reqOvRing(); } }
+  if(!open){ el.classList.add('open'); if(id==='brandPop') railBrandList(); if(id==='reqPop') reqOvRender(); }
 }
 function profGo(page){ railPopClose(); setPage(page); }
 function profLogout(){ railPopClose(); toast('Logged out (prototype)'); }
@@ -103,55 +103,8 @@ function phPageHTML(){
     <div class="ph-empty"><b>Not built yet</b><span>This section is set up in the navigation. Its content will be added in a later step.</span></div></div>`;
 }
 
-/* ── Status overlay (above the brand avatar): Requirement list with CTAs, and the Coming soon links ── */
-const RQ_SOON=[
-  {g:'CRM',items:[['Overview','crm'],['Campaign plans','crm-shortlists'],['Outreach','crm-outreach'],['Onboarding','crm-onboarding'],['Campaign Activation','crm-activation']]},
-  {g:'Workspace',items:[['Information architecture','ia']]}
-];
-function reqOvAll(){ return [...REQ_CAMPAIGNS.map(r=>({r,sec:'Campaigns'})),...REQ_CREATORS.map(r=>({r,sec:'Creators'}))]; }
-function reqOvCounts(){
-  let total=0,done=0;
-  reqOvAll().forEach(({r})=>reqSubsOf(r[0]).forEach(x=>{ total++; if(reqStatus(x.k)==='Completed') done++; }));
-  return {total,done,pct:total?Math.round(done/total*100):0};
-}
-function reqOvRing(){
-  const el=document.getElementById('reqRing'); if(!el) return;
-  const c=reqOvCounts(); el.setAttribute('stroke-dasharray',`${c.pct} 100`);
-  const b=document.getElementById('reqStatusBtn'); if(b) b.setAttribute('aria-label',`Requirements: ${c.done} of ${c.total} action items done`);
-}
-function reqOvTab(k){
-  document.querySelectorAll('.rq-ov-tabs .alert-tab').forEach(x=>x.classList.toggle('on',x.dataset.t===k));
-  const body=document.getElementById('reqOvBody'); if(body) body.scrollTop=0;
-  reqOvRender(k);
-}
-function reqOvGo(k,w){
-  railPopClose(); S.reqReturn={k}; syncReqBack();
-  reqGo(k,w);
-}
-function reqOvSoonGo(page){ railPopClose(); setPage(page); }
-function reqOvRender(tab){
-  const body=document.getElementById('reqOvBody'); if(!body) return;
-  const cur=[...document.querySelectorAll('.rq-ov-tabs .alert-tab.on')][0]?.dataset.t||'req';
-  const t=tab||cur;
-  if(t==='soon'){
-    body.innerHTML=`<p class="rq-ov-note">Hidden from the main navigation for now.</p>`+RQ_SOON.map(g=>`<div class="rq-ov-sec">${esc(g.g)}</div><ul class="rq-ov-links">${g.items.map(([l,p])=>`<li><button type="button" class="rq-ov-link" onclick="reqOvSoonGo('${p}')"><span>${esc(l)}</span><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg></button></li>`).join('')}</ul>`).join('');
-    return;
-  }
-  const c=reqOvCounts();
-  const sec=s=>{
-    const items=reqOvAll().filter(x=>x.sec===s).sort((a,b)=>a.r[1].localeCompare(b.r[1]));
-    return `<div class="rq-ov-sec">${s} <span>${items.length}</span></div><ul class="rq-ov-list">${items.map(({r},i)=>{
-      const [id,pr,title,desc]=r, subs=reqSubsOf(id), st=reqParent(id);
-      return `<li class="rq-ov-item"><div class="rq-ov-top"><span class="rq-p rq-p${pr[1]}">${pr}</span><b class="rq-ov-t">${esc(title)}</b>${reqPill(st)}</div><div class="rq-ov-d">${esc(desc)}</div>${subs.length?`<ul class="rq-ov-subs">${subs.map((x,j)=>{
-        const xs=reqStatus(x.k), ctas=['g','g2'].filter(w=>x[w]);
-        return `<li class="rq-ov-sub" data-rqk="${x.k}"><div class="rq-ov-sr"><span class="rq-ov-sn">${String.fromCharCode(97+j)}</span><span class="rq-ov-st">${esc(x.t)}</span>${reqPill(xs)}${ctas.map(w=>`<button type="button" class="rq-ov-cta" onclick="reqOvGo('${x.k}','${w}')">${esc(x[w].label||'Open')} ↗</button>`).join('')}</div>${xs==='Completed'&&x.h?`<div class="rq-ov-how">${esc(x.h)}</div>`:''}${REQ_NOTES[x.k]?`<div class="rq-ov-note2">${esc(REQ_NOTES[x.k])}</div>`:''}</li>`;
-      }).join('')}</ul>`:''}</li>`;
-    }).join('')}</ul>`;
-  };
-  body.innerHTML=`<div class="rq-ov-sum">${c.done} of ${c.total} action items done · ${c.pct}%</div>${sec('Campaigns')}${sec('Creators')}`;
-  if(S.reqReturn){ const k=S.reqReturn.k; S.reqReturn=null; syncReqBack(); requestAnimationFrame(()=>{ const el=body.querySelector(`[data-rqk="${k}"]`); if(!el) return; el.classList.add('req-flash'); el.scrollIntoView({block:'center'}); setTimeout(()=>el.classList.remove('req-flash'),2600); }); }
-}
-
+/* ── Status overlay (above the brand avatar): nothing to show yet ── */
+function reqOvRender(){ const b=document.getElementById('reqOvBody'); if(b) b.innerHTML='<div class="alert-empty"><b>Nothing here yet</b></div>'; }
 /* ════════ CRM MODULE · model, rules, persistence ════════ */
 const CRM_OUT=['Not Contacted','Contacted','Awaiting Response','Replied','Interested','Negotiating','Agreed','Declined','No Response','On Hold'];
 const CRM_STAGES=['Shortlisted','Contacted','Negotiating','Agreed','Onboarding','Ready','Active'];
@@ -1598,9 +1551,8 @@ function tabsHTML(){
 }
 function paintHeader(){
   syncNav();
-  syncReqBack();
   if(limitedDetail()){ document.getElementById('header').innerHTML=''; document.getElementById('compact').innerHTML=''; return; }
-  if(crmIsPage()||phIsPage()){ document.getElementById('header').innerHTML=''; document.getElementById('compact').innerHTML=''; return; }
+  if(phIsPage()){ document.getElementById('header').innerHTML=''; document.getElementById('compact').innerHTML=''; return; }
   if(listPage()&&!detailId()){ document.getElementById('header').innerHTML=''; document.getElementById('compact').innerHTML=''; return; }
   const c=creatorOf(), first=initialsOf(c.name);
   const badges=[c.tier,c.source].map(t=>`<span class="ds-dh-badge">${esc(t)}</span>`).join('');
@@ -1608,7 +1560,7 @@ function paintHeader(){
   document.getElementById('header').innerHTML=`${crumbHTML()}
     <header class="ds-dh">
       <div class="ds-dh-top">
-        <button class="ds-dh-back" onclick="${S.crmReturn?"crmBack()":S.page==='creators'?"setPage('creators')":"closeDiscCreator()"}" aria-label="Back">${dsBackSvg}</button>
+        <button class="ds-dh-back" onclick="${S.page==='creators'?"setPage('creators')":"closeDiscCreator()"}" aria-label="Back">${dsBackSvg}</button>
         <div class="ds-dh-avatar ${S.saved?'saved':''}" style="background:${AV_PAL[avHash(c.id)%AV_PAL.length]};color:#ffffff">${esc(first)}</div>
         <div class="ds-dh-text">
           <div class="ds-dh-name"><h1>${esc(c.name)}</h1>${badges}</div>
@@ -1620,7 +1572,7 @@ function paintHeader(){
     </header>`;
   document.getElementById('compact').innerHTML=`<div class="compact-inner">
     <div class="compact-row">
-      <button class="icon-btn" onclick="${S.crmReturn?"crmBack()":S.page==='creators'?"setPage('creators')":"closeDiscCreator()"}" aria-label="Back">${icon('back')}</button>
+      <button class="icon-btn" onclick="${S.page==='creators'?"setPage('creators')":"closeDiscCreator()"}" aria-label="Back">${icon('back')}</button>
       ${dsAv(c.id,c.name)}<strong class="compact-name">${esc(c.name)}</strong>
       <div class="actions">${actionsHTML()}</div>
     </div>
@@ -1706,10 +1658,9 @@ function planPostsFor(ids,product){ return (ids||[]).map((cid,i)=>({id:'po'+Date
 function paintBodyRaw(fade){ paintSecNav();
   const main=document.getElementById('main');
   if(phIsPage()){ main.innerHTML=phPageHTML(); document.body.classList.remove('report-mode'); document.getElementById('header').innerHTML=''; document.getElementById('compact').innerHTML=''; syncNav(); return; }
-  if(crmIsPage()){ main.innerHTML=crmRouter(); document.body.classList.remove('report-mode'); document.getElementById('header').innerHTML=''; document.getElementById('compact').innerHTML=''; syncNav(); if(fade){ main.classList.remove('fade-in'); void main.offsetWidth; main.classList.add('fade-in'); } return; }
   const views=[pOverview,pContent,pPerformance,pReports,pCollabs,pAudience];
   document.body.classList.toggle('report-mode', S.view==='report');
-  main.innerHTML=(listPage()&&!detailId())?(S.page==='discover'?discoverHTML():S.page==='creators'?creatorsListHTML():S.page==='collections'?collectionsHTML():S.page==='collection'?collectionDetailHTML():S.page==='shortlist'?shortlistHTML():S.page==='content-tracker'?contentTrackerHTML():S.page==='dashboard'?dashboardHTML():S.page==='tracker'?dashboardHTML():S.page==='plan'?planDetailHTML():S.page==='campaign'?campaignDetailHTML():S.page==='settings'?settingsHTML():S.page==='ia'?iaHTML():S.page==='requirements'?requirementsHTML():S.page==='allcampaigns'?allCampaignsHTML():campaignsHTML()):(limitedDetail()?basicProfilePageHTML(crOf(detailId())):(S.view==='report'?reportHTML():views[S.tab]()));
+  main.innerHTML=(listPage()&&!detailId())?(S.page==='discover'?discoverHTML():S.page==='creators'?creatorsListHTML():S.page==='collections'?collectionsHTML():S.page==='collection'?collectionDetailHTML():S.page==='shortlist'?shortlistHTML():S.page==='content-tracker'?contentTrackerHTML():S.page==='dashboard'?dashboardHTML():S.page==='tracker'?dashboardHTML():S.page==='plan'?planDetailHTML():S.page==='campaign'?campaignDetailHTML():S.page==='settings'?settingsHTML():campaignsHTML()):(limitedDetail()?basicProfilePageHTML(crOf(detailId())):(S.view==='report'?reportHTML():views[S.tab]()));
   if(fade){ main.classList.remove('fade-in'); void main.offsetWidth; main.classList.add('fade-in'); }
   if(['campaigns','campaign','plan','tracker'].includes(S.page)) main.insertAdjacentHTML('afterbegin',CAMP_QA);
   placeCaret();
@@ -2661,191 +2612,8 @@ const DISC=[
  {id:'cr8',name:'Ananya Beauty',handle:'@ananyabeauty',followers:45000,views:35200,tier:'Micro',tags:['Skincare'],source:'Self',collabs:5,likes:1640,last:'2d ago'},
  {id:'cr9',name:'Riya (sample)',handle:'@riya_sample',followers:14200,views:31000,tier:'Micro',tags:['Skincare'],source:'Discover',collabs:0,likes:1600,last:'Never'},
 ];
-/* ════════ Requirements (from 23 Oct 2026 meeting with Karan Pursnani) ════════ */
-const REQ_SECTIONS={feat:'Features / enhancements',fix:'Existing flow fixes',bug:'Bugs / fixes'};
-const REQ_CAMPAIGNS=[
- ['c1','P0','CPV and cost tracking','Editable costs; cost per view calculated automatically at post and campaign level.','feat',"setPage('dashboard')"],
- ['c2','P0','Calendar-month reporting','Default to the current month; filters and analytics use post live dates, not campaign creation dates.','feat',"setPage('dashboard')"],
- ['c3','P0','Cumulative campaign dashboard','Consolidate posts across campaigns, with filters by product, category, date and other attributes.','feat',"setPage('dashboard')"],
- ['c4','P0','Expanded campaign analytics','Views growth, posts published per day, spend and broader performance charts instead of mainly sentiment.','feat',"setPage('campaigns')"],
- ['c5','P0','Product-level drill-down','Clicking a product shows all its live posts and their aggregated performance.','feat',"setPage('campaigns')"],
- ['c6','P0','Organic vs. boosted performance','Identify boosted posts and separate organic reach and views from paid.','feat',"setPage('campaigns')"],
- ['c7','P0','Gender, state and tier analysis','Filter and compare by creator gender, geography and Plix nano / micro / macro tiers.','feat',"setPage('campaigns')"],
- ['c8','P0','Creative concept tracking','Manually assigned concept tags and filters, with CSV support. Automated classification later.','feat',"setPage('campaigns')"],
- ['c9','P1','Custom-column filtering','Filter user-created fields, including view plan vs. boosting plan.','feat',"setPage('settings')"],
- ['c10','P1','Viral content alerts','Notify when a post reaches at least 5× the creator’s average views.','feat',"setPage('dashboard')"],
- ['c11','P1','AI performance overview','Actionable insights and recommendations on the campaign dashboard.','feat',"setPage('dashboard')"],
- ['c12','P1','Active vs. historical campaigns','Separate active from archived campaigns, with cumulative historical analysis.','feat',"setPage('campaigns')"],
- ['c13','P1','Bulk export','Export consolidated campaign data, not only individual campaigns.','feat',"setPage('campaigns')"],
- ['c14','P2','Campaign planning','Planned budget and video count tracked against actual delivery, with progress indicators.','feat',"setPage('campaigns')"],
- ['c15','P2','Budget alerts','Notify when planned budgets are exhausted or exceeded.','feat',"setPage('campaigns')"],
- ['c16','P2','Inactive campaign visibility','Stopping tracking should not leave inactive campaigns cluttering the active view.','feat',"setPage('campaigns')"],
- ['c17','P3','Mobile-friendly reporting','Simplified mobile dashboard or automated performance email summaries.','feat',"setPage('dashboard')"],
- ['c18','P0','Missing campaign posts','65 of 71 uploaded posts accepted in one campaign despite valid links. Fix valid Instagram URLs being rejected on upload.','fix',"setPage('campaigns')"],
- ['c19','P0','Campaign removal UX','Option to remove posts from a campaign; proper handling of campaign deletion.','fix',"setPage('campaigns')"]
-];
-const REQ_CREATORS=[
- ['r1','P0','CSV upload for shortlisting','Bulk-import creator lists directly into campaign or shortlist groups.','feat',"setPage('shortlist')"],
- ['r2','P0','Cost and CPV fields','Editable creator costs; CPV calculated from average views, with cost changes over time.','feat',"setPage('creators')"],
- ['r3','P0','Custom CSV templates','Downloadable and uploadable templates include the configured custom columns.','feat',"setPage('settings')"],
- ['r4','P0','Historical creator performance','Previous Plix collaborations, campaign results, historical costs and average views for repeat creators.','feat',"setPage('creators')"],
- ['r5','P0','Creator and campaign auto-linking','Creators added through campaigns automatically appear in My Creators.','feat',"setPage('creators')"],
- ['r6','P1','Creator SPOC / owner management','Assign the owner for each creator, track communication and actions, and update status from the dashboard.','feat',"setPage('creators')"],
- ['r7','P1','Historical data backfill','Import Plix’s existing creator records, costs and previous campaign links at scale.','feat',"setPage('creators')"],
- ['r8','P1','Historical post detection','Automatically identify previous Plix collaborations, with manual editing for missing records.','feat',"setPage('creators')"],
- ['r9','P1','Creator ranking','Rank shortlisted creators using the campaign brief and scoring criteria.','feat',"setPage('shortlist')"],
- ['r10','P1','Simplified creator indicators','Previous-collaboration and performance indicators shown directly in the list.','feat',"setPage('creators')"],
- ['r11','P2','Creator CRM','Shipment tracking, payment status, content delivery, feedback and other management workflows.','feat',"setPage('creators')"],
- ['r12','P2','MCP / Claude training','Separate session on creator intelligence and analysis workflows.','feat',"setPage('creators')"],
- ['r13','P3','Custom creator tier classification','Custom tier classification for creators.','feat',"setPage('creators')"],
- ['r14','P3','Auto-DM destination intelligence','Identify whether creator content directs users to Amazon, Flipkart or the brand website.','feat',"setPage('creators')"],
- ['r15','P0','Creator upload failures','Only 371 creators accepted from a larger list, though some rejected URLs work correctly.','bug',"setPage('creators')"],
- ['r16','P1','Bulk scoring','Remove page-by-page scoring. Add Select All, date-based selection or automatic scoring of unevaluated creators.','bug',"setPage('creators')"]
-];
-const REQ_SUBS={
- c1:[{k:'1a',t:'Post-level cost and CPV',s:'Completed',h:'Each post has an editable cost in the post drawer (Save cost). CPV is cost ÷ views for each post, shown in the post table.',g:{camp:'ca1',tab:'content',sel:'table'}},
-     {k:'1b',t:'Campaign-level cost and CPV',s:'Completed',h:'The campaign overview shows total spend, Avg CPV and Paid CPV. The spend and budget card compares spend with budget.',g:{camp:'ca1',tab:'performance',sel:'.dk-ov-row'}}],
- c2:[{k:'2a',t:'Default to the current month',s:'Completed',h:'The period control defaults to the current month, for example 1–31 Oct.',g:{page:'dashboard',sel:'.dk-head-actions'}},
-     {k:'2b',t:'Filters and analytics use post live dates',s:'Backend',h:'Charts and filters bucket posts by live post date, not by campaign created date.'}],
- c3:[{k:'3a',t:'Consolidated posts across campaigns',s:'Completed',h:'The dashboard combines posts from all campaigns in one view, scoped by the campaign filter.',g:{page:'dashboard',sel:'#dash-posts'}},
-     {k:'3b',t:'Filters by product, category, date and attributes',s:'Completed',h:'Header filters cover product, category, time, gender, state, tier, concept and campaign.',g:{page:'tracker',sel:'.ac-bar--top',label:'Open dashboard'}}],
- c4:[{k:'4a',t:'Views growth and posts per day',s:'Completed',h:'The views trend and the posts-per-day or per-month timeline sit side by side on the dashboard and campaign overview.',g:{page:'dashboard',dashTab:'overview',sel:'[data-w="timeline"]',label:'Open dashboard'},g2:{camp:'ca1',tab:'performance',sel:'.cp-grid',label:'Open campaign overview'}},
-     {k:'4b',t:'Spend and broader performance charts',s:'Completed',h:'The spend and budget card, creators widget and analytics donuts add spend and performance views beyond sentiment.',g:{page:'dashboard',dashTab:'overview',sel:'[data-w="creators"]',label:'Open dashboard'}}],
- c5:[{k:'5a',t:'Product row shows all live posts',s:'Completed',h:'In Campaign Analytics, Product, each row expands to its live reels.',g:{camp:'ca1',tab:'analytics',dim:'Product',sel:'.ana-card',label:'Open campaign analytics'}},
-     {k:'5b',t:'Aggregated performance per product',s:'Completed',h:'Each product row totals reels, views, organic and paid views, spend and CPV.',g:{page:'dashboard',dashTab:'overview',sel:'[data-w="product"]',label:'Open dashboard'},g2:{page:'tracker',acSlots:['product','post'],sel:'.ac-levels',label:'Open campaign analytics'}}],
- c6:[{k:'6a',t:'Identify boosted posts',s:'Completed',h:'Boosted posts are tagged, and Campaign Analytics has a Boosted only filter.',g:{camp:'ca1',tab:'analytics',sel:'.ana-bar'}},
-     {k:'6b',t:'Separate organic and paid views',s:'Completed',h:'The views trend shows organic vs boosted as a segmented bar. Post tables have Organic and Paid columns.',g:{page:'dashboard',sel:'.tv-seg'}}],
- c7:[{k:'7a',t:'Filter by gender, geography and tier',s:'Completed',h:'The dashboard header filters include gender, state and tier.',g:{page:'dashboard',sel:'.dk-head-actions'}},
-     {k:'7b',t:'Compare performance by segment',s:'Completed',h:'The creators widget compares Gender, Location, Tier and Concept. Campaign Analytics has Gender, State and Tier donuts.',g:{page:'dashboard',sel:'.dk-cwidget'}}],
- c8:[{k:'8a',t:'Manually assigned concept tags',s:'Completed',h:'Each post has a concept tag, shown on post rows.',g:{camp:'ca1',tab:'content',sel:'table'}},
-     {k:'8b',t:'Concept filters and CSV import',s:'Completed',h:'Concept filters sit in the dashboard header and creators widget. CSV import reads a concept column when adding posts.',g:{camp:'ca1',tab:'content',sel:'[onclick^="openAddPost"]'}}],
- c9:[{k:'9a',t:'User-created fields',s:'Completed',h:'Custom fields can be added in Settings and are included in CSV templates.',g:{page:'settings',sel:'button[onclick*="openCustomField("]'}},
-     {k:'9b',t:'Filter by custom fields, incl. view plan vs boosting plan',s:'Not started'}],
- c10:[{k:'10a',t:'Viral badge on high-performing posts',s:'Completed',h:'Posts at 5× their creator’s average views get a viral badge.',g:{page:'dashboard',dashTab:'overview',period:'all',sel:'#dash-posts .dk-viral',label:'Open dashboard'}},
-      {k:'10b',t:'Alert at 5× the creator’s average views',s:'Completed',h:'Needs attention lists posts at 5× their creator’s average views as Viral.',g:{page:'dashboard',dashTab:'overview',sel:'#dash-alerts',label:'Open dashboard'}}],
- c11:[{k:'11a',t:'Insights and recommendations on the dashboard',s:'Completed',h:'The dashboard has an Insights card with recommendations on concept, product, format and paid reach, based on the posts in view.',g:{page:'dashboard',dashTab:'overview',sel:'#dash-insights',label:'Open dashboard'}},
-      {k:'11b',t:'Ask Adam assistant',s:'Completed',h:'Ask Adam answers questions about the dashboard and campaigns from a chat panel on every page.',g:{page:'dashboard',sel:'#askBtn'}}],
- c12:[{k:'12a',t:'Separate active from archived campaigns',s:'Completed',h:'The lifecycle filter separates Live and Completed. Completed cards are greyed out.',g:{page:'campaigns',sel:'.campl-tools'}},
-      {k:'12b',t:'Cumulative historical analysis',s:'Backend'}],
- c13:[{k:'13a',t:'Consolidated export from the dashboard',s:'Completed',h:'Export report downloads one row per post for the selected campaigns as CSV, then confirms with a toast.',g:{page:'dashboard',sel:'[onclick="exportDashboard()"]'}},
-      {k:'13b',t:'Export individual campaign data',s:'Completed',h:'Export campaign data, from the campaign menu or its row, downloads that campaign’s posts as CSV, then confirms with a toast.',g:{page:'campaigns',sel:'.cp-sel-td'}}],
- c14:[{k:'14a',t:'Planned budget vs actual spend',s:'Completed',h:'The spend and budget card shows spend against the planned budget, with percent used.',g:{camp:'ca1',tab:'performance',sel:'.sv-total'}},
-      {k:'14b',t:'Planned videos vs delivered progress',s:'Completed',h:'The pipeline tiles show Published and Lined up against planned videos.',g:{camp:'ca1',tab:'performance',sel:'.cov-steps'}}],
- c15:[{k:'15a',t:'Over-budget alert',s:'Completed',h:'Over-budget campaigns appear in Needs attention and get an Over budget status.',g:{page:'dashboard',sel:'#dash-alerts'}},
-      {k:'15b',t:'Budget exhausted alert',s:'Not started'}],
- c16:[{k:'16a',t:'Stopped tracking leaves the active view',s:'Completed',h:'Tracking and lifecycle filters keep stopped or completed campaigns out of the live view.',g:{page:'campaigns',sel:'.campl-tools'}},
-      {k:'16b',t:'Closed status for inactive campaigns',s:'Completed',h:'Inactive campaigns show a Closed health status.',g:{page:'campaigns',sel:'table'}}],
- c17:[{k:'17a',t:'Simplified mobile dashboard',s:'Not started'},
-      {k:'17b',t:'Automated performance email summaries',s:'Not started'}],
- c18:[{k:'18a',t:'Investigate 65 of 71 posts accepted',s:'Completed',h:'The Add posts dialog explains which rows were accepted and which need fixing, with a Needs fixing view.',g:{camp:'ca1',tab:'content',sel:'[onclick^="openAddPost"]'}},
-      {k:'18b',t:'Fix valid Instagram URLs rejected on upload',s:'Completed',h:'Valid Instagram link forms are accepted on upload; invalid ones are listed with the reason and can be fixed inline.',g:{camp:'ca1',tab:'content',sel:'[onclick^="openAddPost"]'}}],
- c19:[{k:'19a',t:'Remove posts from a campaign',s:'Completed',h:'Remove from campaign is in the post drawer.',g:{camp:'ca1',tab:'content',sel:'table'}},
-      {k:'19b',t:'Campaign deletion',s:'Completed',h:'Delete campaign is in the campaign header ⋯ menu, behind a confirmation dialog.',g:{camp:'ca1',tab:'performance',sel:'.cdh-actions .ds-more'}}]
-};
-const REQ_CR_SUBS={
- r1:[['1a','Import creator list into a shortlist group',{plan:'first',sel:'[onclick^="openAttachTo(\'plan\'"]',label:'Open shortlist'}],['1b','Bulk import into a campaign group',{camp:'ca1',tab:'creators',sel:'[onclick^="openAttachTo(\'campaign\'"]',label:'Open campaign'}]],
- r2:[['2a','Editable creator costs',{page:'creators',sel:'input[aria-label^="Cost for"]'}],['2b','CPV from average views, with cost changes over time',{creator:'first',tab:2,sel:'#perf-cpv',label:'Open profile'}]],
- r3:[['3a','Template includes custom columns',{page:'settings',sel:'button[onclick*="openCustomField("]'}],['3b','Upload accepts custom columns',{page:'creators',act:'addcsv',sel:'.addc-tbl',label:'Open upload'}]],
- r4:[['4a','Previous Plix collaborations and campaign results',{camp:'ca1',tab:'creators',quick:'first',qtab:'lifetime',sel:'#cq-journey',label:'Open creator'}],['4b','Historical costs and average views',{camp:'ca1',tab:'creators',quick:'first',qtab:'lifetime',sel:'#cq-history',label:'Open creator'}]],
- r5:[['5a','Campaign creators appear in My Creators']],
- r6:[['6a','Assign an owner (SPOC) per creator',{page:'creators',quick:'first',qtab:'campaign',sel:'.cq-spoc',label:'Open creator'}],['6b','Track actions and update status from the dashboard']],
- r7:[['7a','Import historical creator records at scale'],['7b','Import previous campaign links']],
- r8:[['8a','Automatically detect past collaborations',{page:'creators',quick:'first',qtab:'lifetime',sel:'#cq-journey',label:'Open creator'}],['8b','Manual editing for missing records']],
- r9:[['9a','Rank shortlisted creators against the brief',{plan:'first',sel:'.pl-fit-th',label:'Open shortlist'}],['9b','Use scoring criteria']],
- r10:[['10a','Indicators shown in the list']],
- r11:[['11a','Shipment and payment tracking'],['11b','Content delivery and feedback']],
- r12:[['12a','Creator intelligence training session']],
- r13:[['13a','Custom creator tier classification']],
- r14:[['14a','Identify Amazon, Flipkart or brand-site destination']],
- r15:[['15a','Investigate 371 accepted of a larger list',{page:'creators',act:'addcsv',sel:'.addc-pill--ok',label:'Open upload'}],['15b','Accept rejected URLs that work',{page:'creators',act:'addcsv',sel:'.addc-tbl tr.is-bad',label:'Open upload'}]],
- r16:[['16a','Select All and date-based selection',{page:'creators',sel:'table'}],['16b','Auto-score unevaluated creators',{page:'creators',sel:'[onclick="autoScoreMy()"]',label:'Open My creators'}]]
-};
-/* Items whose flow still needs deciding; shown as a note on the requirement row */
-/* Blue explanation for completed creator items */
-const REQ_CR_H={
-  r1a:'Campaign plan groups import a CSV or pasted list from the same Add Creators popup as My creators.',
-  r1b:'Campaign creators are imported in bulk from the campaign’s Add creators popup.',
-  r2a:'Each creator has an editable cost in My creators; changing it updates the CPV column.',
-  r2b:'Average CPV appears in the creator profile under Content performance, calculated as cost divided by average views.',
-  r3a:'Downloadable templates include each template’s custom columns, managed under Settings.',
-  r3b:'The CSV preview shows every uploaded column, including custom ones, and import keeps their values.',
-  r4a:'The creator quick view’s Lifetime tab lists previous Plix collaborations and campaign results.',
-  r4b:'The Lifetime tab shows historical views, total spend and average CPV for the creator.',
-  r8a:'The creator quick view’s Lifetime tab lists past Plix collaborations, found from campaign records.',
-  r6a:'Each creator has a SPOC, editable in the quick view and the My creators table.',
-  r9a:'Shortlisted creators show a Fit for campaign score that ranks them against the brief.',
-  r15a:'The upload preview separates accepted creators from those needing fixing, so the accepted count can be checked.',
-  r15b:'Rejected handles can be corrected inline in the preview and then accepted.',
-  r16b:'My creators has an Auto-score unevaluated action that scores creators without an evaluation.'
-};
-const REQ_NOTES={r7a:'Flow to be thought through: how historical records map to creators and campaigns, and how duplicates are handled.',r7b:'Flow to be thought through: how previous campaign links are matched to creators and campaigns.'};
-const REQ_CR_BACKEND=['r5a','r9b'];
-const REQ_CR_PROG=['r16a'];
-const REQ_SUB_BY={};
-Object.values(REQ_SUBS).flat().forEach(x=>REQ_SUB_BY[x.k]=x);
-const REQ_CR_DONE=['r1a','r1b','r2a','r2b','r3a','r3b','r4a','r4b','r6a','r8a','r9a','r15a','r15b','r16b'];
-Object.entries(REQ_CR_SUBS).forEach(([id,arr])=>arr.forEach(([k,t,g])=>REQ_SUB_BY['r'+k]={k:'r'+k,t,s:REQ_CR_DONE.includes('r'+k)?'Completed':REQ_CR_PROG.includes('r'+k)?'In progress':REQ_CR_BACKEND.includes('r'+k)?'Backend':'Not started',g,h:REQ_CR_H['r'+k]}));
-const reqStatus=k=>(S.reqStatus||{})[k]||(REQ_SUB_BY[k]&&REQ_SUB_BY[k].s)||'Not started';
-function reqSubsOf(id){ return REQ_SUBS[id]||(REQ_CR_SUBS[id]||[]).map(([k])=>REQ_SUB_BY['r'+k]); }
-function reqParent(id){
-  const st=reqSubsOf(id).map(x=>reqStatus(x.k));
-  if(st.length&&st.every(s=>s==='Completed')) return 'Completed';
-  if(st.some(s=>s!=='Not started')) return 'In progress';
-  return 'Not started';
-}
-const reqPill=s=>`<span class="rq-st rq-st-${s.replace(/\s/g,'-').toLowerCase()}">${s}</span>`;
-function setReqStatus(k,v){ S.reqStatus={...(S.reqStatus||{}),[k]:v}; paintBody(); }
-function reqGo(k,which='g'){
-  const t=REQ_SUB_BY[k]&&REQ_SUB_BY[k][which]; if(!t) return;
-  if(S.page==='requirements') S.reqReturn={k,tab:S.reqTab||'campaigns',y:window.scrollY};
-  if(t.period) dashState().period=t.period;
-  if(t.plan){ openPlan(t.plan==='first'?CAMP_PLANS[0].id:t.plan); }
-  else if(t.act==='addcsv'){ setPage('creators'); if(!S.addCsv) S.addCsv=addcDemoFile(); S.addOpen=true; S.addMode='csv'; S.addPlan=null; if(!S.addcView) S.addcView='bad'; paintBody(); }
-  else if(t.creator){ S.page='creators'; openMyCreator(t.creator==='first'?DISC[0].id:t.creator,t.tab??2); }
-  else if(t.camp){ openCampaign(t.camp); S.cTab=t.tab; if(t.dim) S.cDim=t.dim; paintHeader(); paintBody(); }
-  else { if(t.dashTab) S.dashTab=t.dashTab; if(t.acSlots) Object.assign(S,{acSlots:[...t.acSlots],acSelS:[[],[],[],[]],acActive:0,acExp:{},acViewName:'Custom'}); setPage(t.page); }
-  if(t.quick){ S.cqTab=t.qtab||'campaign'; const id=t.quick==='first'?(t.camp?campOf(t.camp).creatorIds[0]:DISC[0].id):t.quick; if(id) openCreatorSide(id); }
-  setTimeout(()=>{ const el=document.querySelector(t.sel); if(!el) return; el.classList.add('req-flash'); el.scrollIntoView({block:'center',behavior:'smooth'}); setTimeout(()=>el.classList.remove('req-flash'),2600); },350);
-}
-/* Return path: after a requirement jump, the sidebar Requirements row shows a Back chip; going back restores tab, scroll and flashes the source item */
-function reqNav(){ if(S.reqReturn) return reqBack(); setPage('requirements'); }
-function reqBack(){
-  const r=S.reqReturn; if(!r) return setPage('requirements');
-  S.reqReturn=null; S.reqTab=r.tab;
-  setPage('requirements');
-  requestAnimationFrame(()=>{
-    window.scrollTo(0,r.y||0);
-    const el=document.querySelector(`[data-rqk="${r.k}"]`); if(!el) return;
-    el.classList.add('req-flash'); setTimeout(()=>el.classList.remove('req-flash'),2600);
-  });
-}
-function syncReqBack(){ const b=document.getElementById('reqStatusBtn'); if(b) b.classList.toggle('is-return',!!S.reqReturn); }
-function requirementsHTML(){
-  const tab=S.reqTab||'campaigns';
-  /* priority order P0 → P3; the sort is stable, so items keep their order within a priority */
-  const list=(tab==='creators'?REQ_CREATORS:REQ_CAMPAIGNS).slice().sort((a,b)=>a[1].localeCompare(b[1]));
-  const parents=list.map(r=>reqParent(r[0]));
-  const subCount=list.reduce((n,r)=>n+reqSubsOf(r[0]).length,0);
-  const done=parents.filter(s=>s==='Completed').length, prog=parents.filter(s=>s==='In progress').length;
-  const tabBtn=(k,label,n)=>`<button class="rq-tab${tab===k?' on':''}" onclick="setPageState('reqTab','${k}')">${label}<span>${n}</span></button>`;
-  const rowsHTML=list.map((r,i)=>{
-    const [id,pr,t,d,sec]=r, n=i+1, subs=reqSubsOf(id);
-    const head=`<tr class="rq-parent"><td class="rq-noc"><span class="rq-no">${n}</span></td><td><span class="rq-p rq-p${pr[1]}">${pr}</span></td><td><div class="rq-t">${esc(t)}</div><div class="rq-d">${esc(d)}</div><div class="rq-sec-tag">${REQ_SECTIONS[sec]}</div></td><td>${reqPill(parents[i])}</td><td></td></tr>`;
-    const body=subs.map((x,j)=>{
-      const st=reqStatus(x.k);
-      return `<tr class="rq-sub" data-rqk="${x.k}"><td class="rq-noc"><span class="rq-sn">${n}.${String.fromCharCode(97+j)}</span></td><td></td><td><div class="rq-subt">${esc(x.t)}</div>${st==='Completed'&&x.h?`<div class="rq-how">${esc(x.h)}</div>`:''}${REQ_NOTES[x.k]?`<div class="rq-note">${esc(REQ_NOTES[x.k])}</div>`:''}</td><td><select class="rq-status rq-s-${st.replace(/\s/g,'-').toLowerCase()}" aria-label="Status for ${esc(x.t)}" onchange="setReqStatus('${x.k}',this.value)">${['Not started','In progress','Completed','Backend'].map(o=>`<option${o===st?' selected':''}>${o}</option>`).join('')}</select></td><td class="rq-goc"><div class="rq-ctas">${['g','g2'].filter(w=>x[w]).map(w=>`<button class="ds-btn ds-btn--outline ds-btn--sm" onclick="reqGo('${x.k}','${w}')">${esc(x[w].label||'Open')} ↗</button>`).join('')}</div></td></tr>`;
-    }).join('');
-    return head+body;
-  }).join('');
-  const sections=`<div class="rq-sec"><table class="rq-table"><thead><tr><th class="rq-noc">#</th><th class="rq-pc">Priority</th><th>Requirement / action item</th><th class="rq-stc">Status</th><th class="rq-goc"></th></tr></thead><tbody>${rowsHTML}</tbody></table></div>`;
-  return `<div class="rq-page ds-page"><div class="ds-head"><div><h1 class="ds-page-title">Requirements</h1><p class="ds-page-desc">From the 23 Oct 2026 meeting with Karan Pursnani · Action items, priorities and status</p></div></div>
-    <div class="rq-bar"><div class="rq-tabs">${tabBtn('campaigns','Campaigns',REQ_CAMPAIGNS.length)}${tabBtn('creators','Creators',REQ_CREATORS.length)}</div><span class="rq-sum">${list.length} requirements · ${subCount} action items · ${done} completed · ${prog} in progress</span></div>
-    ${sections}</div>`;
-}
-function syncNav(){ syncPinned(); const cur=crmNavCur()||{plan:'campaigns',shortlist:'campaigns',campaign:'campaigns',collection:'collections','content-tracker':'campaigns'}[S.page]||S.page; document.querySelectorAll('.nav a.nav-row[data-page]').forEach(a=>{ const on=a.dataset.page===cur; a.classList.toggle('on',on); on?a.setAttribute('aria-current','page'):a.removeAttribute('aria-current'); }); }
-function setPage(p){ if(p==='shortlist'){ p='campaigns'; S.campTab='draft'; } if(p==='tracker') S.dashTab='tracker'; else if(p==='dashboard'&&S.dashTab==='tracker') S.dashTab='overview'; S.page=p; S.crmReturn=null; S.discCreator=null; S.myCreator=null; paintHeader(); crmNavAutoOpen(); paintBody(true); window.scrollTo(0,0); }
-/* CRM nav starts collapsed; it opens only when one of its pages is the current page */
-function crmNavAutoOpen(){ const cn=document.querySelector('.crm-nav'); if(!cn) return; const on=!!cn.querySelector('.nav-row.sub.on'); if(on&&cn.classList.contains('closed')){ cn.classList.remove('closed'); cn.querySelector('.nav-toggle')?.setAttribute('aria-expanded','true'); } }
+function syncNav(){ syncPinned(); const cur={plan:'campaigns',shortlist:'campaigns',campaign:'campaigns',collection:'collections','content-tracker':'campaigns'}[S.page]||S.page; document.querySelectorAll('.nav a.nav-row[data-page]').forEach(a=>{ const on=a.dataset.page===cur; a.classList.toggle('on',on); on?a.setAttribute('aria-current','page'):a.removeAttribute('aria-current'); }); }
+function setPage(p){ if(p==='shortlist'){ p='campaigns'; S.campTab='draft'; } if(p==='tracker') S.dashTab='tracker'; else if(p==='dashboard'&&S.dashTab==='tracker') S.dashTab='overview'; S.page=p; S.discCreator=null; S.myCreator=null; paintHeader(); paintBody(true); window.scrollTo(0,0); }
 function setDisc(k,v){ S[k]=v; paintBody(); }
 function setDiscFilter(v){ S.discFilter=v; paintBody(); const i=document.querySelector('.disc-search input'); if(i){ i.focus(); i.setSelectionRange(v.length,v.length); } }
 function addDisc(id){ if(!isInMy(id)) S.discAdded.push(id); const dc0=DISC.find(x=>x.id===id); if(dc0)dc0.repo=false; paintBody(); { const dc=DISC.find(x=>x.id===id); addToast('Successfully added',`${dc?dc.name:'Creator'} has been successfully added to`,'My creators',()=>{ S.discCreator=null; setPage('creators'); }); } }
@@ -2853,99 +2621,7 @@ function openDiscCreator(id){ S.discCreator=id; S.tab=0; S.menu=null; paintHeade
 
 const nameBtn=(c,fn)=>`<button onclick="${fn}('${c.id}')" style="background:none;border:0;padding:0;font:inherit;font-weight:500;color:var(--ink-strong);cursor:pointer;text-align:left">${esc(c.name)}</button>`;
 const personCell=(c,fn)=>`<div class="row" style="flex-wrap:nowrap;gap:10px">${dsAv(c.id,c.name)}<div style="min-width:0"><div>${nameBtn(c,fn)}</div><span class="muted" style="font-size:12px">${esc(c.handle)}</span></div></div>`;
-/* ════════ Information architecture (site map + flows) ════════ */
-const IA_GROUPS=[
- {group:'Creator',pages:[
-   {name:'Discover',go:"setPage('discover')",kids:[
-     {t:'Creator detail',k:'Page',go:"openDiscCreator('cr1')"},
-     {t:'Add creator',k:'Dialog'}]},
-   {name:'My creators',go:"setPage('creators')",kids:[
-     {t:'Creator profile',k:'Page',go:"goCreator('cr1')"},
-     {t:'Overview · Content · Performance · Reports · Collabs · Audience',k:'Tabs'},
-     {t:'Add creator · Import CSV',k:'Dialog'}]},
-   {name:'Campaign plans',go:"setPage('shortlist')",kids:[
-     {t:'Campaign plan',k:'Page',go:"openPlan('pl1')"},
-     {t:'All creators · Shortlisted · Brief · Compare',k:'Tabs'},
-     {t:'Edit plan · Import CSV · Create campaign',k:'Dialog'}]}]},
- {group:'Campaigns',pages:[
-   {name:'Dashboard',go:"setPage('dashboard')",kids:[
-     {t:'Time · category · product · gender · state · tier · concept · campaign',k:'Filters'},
-     {t:'Post details',k:'Drawer',go:"openPost('po1')"},
-     {t:'Export report',k:'Action'}]},
-   {name:'My campaigns',go:"setPage('campaigns')",kids:[
-     {t:'Campaign detail',k:'Page',go:"openCampaign('ca1')"},
-     {t:'Performance · Posts · Creators · Summary · Products · Settings',k:'Tabs'},
-     {t:'Manage · Add creators · Add posts · Tracking configuration',k:'Dialogs'}]}]},
- {group:'Workspace',pages:[
-   {name:'Settings',go:"setPage('settings')",kids:[
-     {t:'Custom fields · CSV templates',k:'Section'},
-     {t:'Team access',k:'Section'},
-     {t:'Import and change history',k:'Section'}]},
-   {name:'Information architecture',go:"setPage('ia')",kids:[]}]}
-];
-const IA_FLOWS=[
- ['Discover','Add creator','My creators','Creator profile','Add to campaign','Create campaign','Add posts','Dashboard'],
- ['Campaign plan','Shortlist creators','Compare','Brief','Create campaign'],
- ['My campaigns','Campaign detail','Tracking configuration','Posts (List / Calendar)','View post drawer']
-];
-function iaHTML(){
-  // Canvas layout: root → groups → pages → sub-views, joined by curved connectors.
-  const X={root:0,group:205,page:385,kid:605}, W={root:170,group:130,page:170,kid:380}, H={root:44,group:34,page:42,kid:44}, GAP=12, BLOCK_GAP=26, TOP=24;
-  const nodes=[], edges=[];
-  let y=TOP; const groupCenters=[];
-  IA_GROUPS.forEach(g=>{
-    const pageCenters=[];
-    g.pages.forEach(p=>{
-      const kids=p.kids.length||1;
-      const blockH=kids*(H.kid+GAP)-GAP, cy=y+blockH/2;
-      pageCenters.push(cy);
-      const pid='p'+nodes.length;
-      nodes.push({id:pid,kind:'page',x:X.page,y:cy-H.page/2,w:W.page,h:H.page,label:p.name,go:p.go});
-      p.kids.forEach((k,i)=>{
-        const kid='k'+nodes.length;
-        const ky=y+i*(H.kid+GAP)+H.kid/2;
-        nodes.push({id:kid,kind:'kid',x:X.kid,y:ky-H.kid/2,w:W.kid,h:H.kid,label:k.t,tag:k.k,go:k.go});
-        edges.push({from:pid,to:kid,fx:X.page+W.page,fy:cy,tx:X.kid,ty:ky});
-      });
-      if(!p.kids.length){ /* leaf page: no kids */ }
-      y+=blockH+BLOCK_GAP;
-    });
-    const gc=pageCenters.reduce((a,b)=>a+b,0)/pageCenters.length;
-    groupCenters.push(gc);
-    const gid='g'+nodes.length;
-    nodes.push({id:gid,kind:'group',x:X.group,y:gc-H.group/2,w:W.group,h:H.group,label:g.group});
-    g.pages.forEach((p,i)=>edges.push({from:gid,to:'p'+(nodes.findIndex(n=>n.kind==='page'&&n.label===p.name)),fx:X.group+W.group,fy:gc,tx:X.page,ty:pageCenters[i]}));
-  });
-  const H_TOTAL=y-BLOCK_GAP+TOP, rootY=H_TOTAL/2;
-  nodes.unshift({id:'root',kind:'root',x:X.root,y:rootY-H.root/2,w:W.root,h:H.root,label:'Creator intelligence prototype'});
-  const gids=nodes.filter(n=>n.kind==='group');
-  gids.forEach(g=>edges.push({from:'root',to:g.id,fx:X.root+W.root,fy:rootY,tx:X.group,ty:g.y+H.group/2}));
-  const byId=Object.fromEntries(nodes.map(n=>[n.id,n]));
-  const path=e=>{const dx=(e.tx-e.fx)*0.5;return `M${e.fx},${e.fy} C${e.fx+dx},${e.fy} ${e.tx-dx},${e.ty} ${e.tx},${e.ty}`};
-  // Resolve edge endpoints from node boxes so every curve meets its node edge exactly.
-  const resolved=edges.map(e=>{const f=byId[e.from],t=byId[e.to];return {...e,fx:f.x+f.w,fy:f.y+f.h/2,tx:t.x,ty:t.y+t.h/2}});
-  const CW=X.kid+W.kid+8, CH=Math.max(H_TOTAL,rootY*2)+TOP;
-  const svg=`<svg class="ia-svg" width="${CW}" height="${CH}" viewBox="0 0 ${CW} ${CH}" aria-hidden="true">${resolved.map(e=>`<path d="${path(e)}" class="ia-edge ${byId[e.to].kind==='kid'?'ia-edge--kid':''}"/>`).join('')}</svg>`;
-  const nodeHTML=n=>{
-    const st=`left:${n.x}px;top:${n.y}px;width:${n.w}px;height:${n.h}px`;
-    if(n.kind==='root') return `<div class="ia-n ia-n--root" style="${st}">${esc(n.label)}</div>`;
-    if(n.kind==='group') return `<div class="ia-n ia-n--group" style="${st}">${esc(n.label)}</div>`;
-    if(n.kind==='page') return `<button class="ia-n ia-n--page" style="${st}" onclick="${n.go}">${esc(n.label)}</button>`;
-    const body=`<span class="ia-n-t">${esc(n.label)}</span><span class="ia-n-k">${esc(n.tag)}</span>`;
-    return n.go?`<button class="ia-n ia-n--kid" style="${st}" onclick="${n.go}">${body}</button>`:`<div class="ia-n ia-n--kid ia-n--static" style="${st}">${body}</div>`;
-  };
-  const canvas=`<div class="ia-canvas" style="width:${CW}px;height:${CH}px">${svg}${nodes.map(nodeHTML).join('')}</div>`;
-  const flows=IA_FLOWS.map((f,i)=>`<div class="ia-flow"><span class="ia-flow-name">Flow ${i+1}</span>${f.map((s,j)=>`<span class="ia-step">${esc(s)}</span>${j<f.length-1?'<span class="ia-arrow" aria-hidden="true">→</span>':''}`).join('')}</div>`).join('');
-  return `<div class="ds-page">
-    ${dsPageHead({title:'Information architecture',desc:'Site map of the prototype: every page, its sub-views and dialogs, and the main user flows. Click a page or sub-view to open it.'})}
-    <div class="ds-card ia-card"><div class="ia-scroll">${canvas}</div></div>
-    <div class="ds-card ds-pad ia-card">
-      <span class="ds-section-title">Key user flows</span>
-      <div class="ia-flows">${flows}</div>
-    </div>
-  </div>`;
-}
-function listPage(){ return ['discover','creators','collections','collection','shortlist','dashboard','tracker','campaigns','content-tracker','plan','campaign','settings','ia','requirements','allcampaigns'].includes(S.page); }
+function listPage(){ return ['discover','creators','collections','collection','shortlist','dashboard','tracker','campaigns','content-tracker','plan','campaign','settings'].includes(S.page); }
 function detailId(){ return S.page==='discover'?S.discCreator:S.page==='creators'?S.myCreator:null; }
 function crumbHTML(){
   const id=detailId(); if(!id) return '';
@@ -5252,8 +4928,8 @@ function nlCreate(){
   const nid='pl'+Date.now();
   CAMP_PLANS.unshift({id:nid,creators:[...new Set(matched)],shortlisted:[],created:TODAY,stage:matched.length?'Creators added':'New',comments:'',...plFields(S.plDraft),name});
   S.nlOpen=false; S.nlCsv=null;
-  (crmIsPage()?crmOpenPlan(nid):openPlan(nid));
-  addToast('List created',`with ${matched.length} creator${matched.length===1?'':'s'}${missing.length?` (${missing.length} skipped)`:''} in`,name,()=>(crmIsPage()?crmOpenPlan(nid):openPlan(nid)));
+  openPlan(nid);
+  addToast('List created',`with ${matched.length} creator${matched.length===1?'':'s'}${missing.length?` (${missing.length} skipped)`:''} in`,name,()=>openPlan(nid));
 }
 function nlToggleFull(){ S.nlFull=!S.nlFull; paintBody(); }
 function nlSyncShort(){
@@ -7144,7 +6820,7 @@ const contentFitOf=i=>[50,38,87][i%3];
 const CONCEPTS=['How-to','Before/After','Review','Gifting','Unboxing','Routine'];
 const PRODUCTS=['Plix Glow Serum','Plix Face Wash','Plix Festive Kit'];
 const dsPerson=(c,fn)=>{ if(!c) return '—'; const nb=fn?`<button class="ds-namebtn" onclick="${fn}('${c.id}')">${esc(c.name)}</button>`:`<span class="ds-table-title">${esc(c.name)}</span>`; return `<div class="ds-person">${dsAv(c.id,c.name)}<div class="ds-person-text"><span class="ds-table-title">${nb}</span><span class="ds-table-meta">${esc(c.handle)}</span></div></div>`; };
-function goCreator(id){ S.crmReturn=crmIsPage()?S.page:null; S.page='creators'; S.myCreator=id; S.tab=0; S.menu=null; paintHeader(); paintBody(true); window.scrollTo(0,0); }
+function goCreator(id){ S.page='creators'; S.myCreator=id; S.tab=0; S.menu=null; paintHeader(); paintBody(true); window.scrollTo(0,0); }
 function openPlan(id){ S.planId=id; S.plSel=[]; S.plCmpOnly=null; S.plNoteEdit=null; S.pTab='overview'; S.plStatus='All'; S.page='plan'; S.discCreator=null; S.myCreator=null; paintHeader(); paintBody(true); window.scrollTo(0,0); }
 function openCampaign(id){ if(S.page!=='campaign')S.campReturn={page:S.page,myCreator:S.myCreator||null,discCreator:S.discCreator||null}; S.campId=id; S.cTab='performance'; S.page='campaign'; S.discCreator=null; S.myCreator=null; paintHeader(); paintBody(true); window.scrollTo(0,0); }
 function crumbDS(root,rootPage,name){ return `<nav class="ds-crumb" aria-label="Breadcrumb"><button class="ds-link" onclick="setPage('${rootPage}')">${root}</button><span>/</span><span>${esc(name)}</span></nav>`; }
@@ -7270,7 +6946,6 @@ function planDetailHTML(){
   const isShort=id=>p.shortlisted.includes(id);
   const sel=(S.plSel||[]).filter(id=>p.creators.includes(id));
   const st=planStageOf(p), prods=planProds(p);
-  const crm=S.page==='crm-plan';
   let body='';
   if(tab==='brief'){
     body=planReportHTML(p);
@@ -7280,19 +6955,19 @@ function planDetailHTML(){
     const pst=S.plStatus||'All';
     const rows=creators.filter(c=>pst==='All'||(pst==='Shortlisted')===isShort(c.id)).filter(c=>c.name.toLowerCase().includes(q)).filter(c=>tagFilterOK('plan',c.id));
     const ids=rows.map(c=>c.id), allOn=ids.length>0&&ids.every(id=>sel.includes(id));
-    const bar=sel.length?`<div class="pl-bulk" role="region" aria-label="Selection actions"><strong>${sel.length} creator${sel.length===1?'':'s'} selected</strong><span class="pl-bulk-sp"></span>${crm?'<button type="button" class="pl-bulk-btn" onclick="crmSendSelected()">'+icon('plus','ico-sm')+'Send to outreach</button>':''}<button type="button" class="pl-bulk-btn" onclick="plBulkScore()">${icon('sparkle','ico-sm')}Score creators</button><button type="button" class="pl-bulk-btn" onclick="plBulkStatus()">${icon('check','ico-sm')}Change status</button><button type="button" class="pl-bulk-btn" onclick="plBulkCompare()">${icon('compare','ico-sm')}Compare</button><button type="button" class="pl-bulk-btn is-danger" onclick="plBulkRemove()">${icon('x','ico-sm')}Remove creators</button><button type="button" class="pl-bulk-btn pl-bulk-clear" onclick="plSelClear()">Clear</button></div>`:'';
+    const bar=sel.length?`<div class="pl-bulk" role="region" aria-label="Selection actions"><strong>${sel.length} creator${sel.length===1?'':'s'} selected</strong><span class="pl-bulk-sp"></span><button type="button" class="pl-bulk-btn" onclick="plBulkScore()">${icon('sparkle','ico-sm')}Score creators</button><button type="button" class="pl-bulk-btn" onclick="plBulkStatus()">${icon('check','ico-sm')}Change status</button><button type="button" class="pl-bulk-btn" onclick="plBulkCompare()">${icon('compare','ico-sm')}Compare</button><button type="button" class="pl-bulk-btn is-danger" onclick="plBulkRemove()">${icon('x','ico-sm')}Remove creators</button><button type="button" class="pl-bulk-btn pl-bulk-clear" onclick="plSelClear()">Clear</button></div>`:'';
     body=`<div class="ds-toolbar">${dsSearch('pQ','Search by handle or name',S.pQ||'')}${tagFilterHTML('plan')}<label class="ds-filter${pst!=='All'?' is-active':''}"><span>${pst==='All'?'Status':esc(pst)}</span><select aria-label="Status" onchange="setPlStatus(this.value)">${['All','Shortlisted','Considering'].map(o=>`<option value="${o}" ${pst===o?'selected':''}>${o==='All'?'All statuses':o}</option>`).join('')}</select></label><span class="ds-spacer"></span><button class="ds-btn ds-btn--outline ds-btn--sm" onclick="toast('Scoring requested for all creators · demo')">${icon('sparkle','ico-sm')}Score all creators</button></div>${bar}
-    <div class="ds-table-wrap"><table class="ds-table ds-table--fit"><thead><tr><th class="ds-cb"><input type="checkbox" aria-label="Select all creators" ${allOn?'checked':''} onchange="plSelAll(this.checked,'${ids.join(',')}')"></th><th>Creator</th><th class="ds-num">Followers</th><th>Tier</th><th>Stage</th><th class="pl-fit-th">Fit for campaign</th><th>Content fit</th><th class="ds-num">${crm?'Estimated cost':'Creator cost'}</th><th>Tags</th><th>Actions</th></tr></thead>
+    <div class="ds-table-wrap"><table class="ds-table ds-table--fit"><thead><tr><th class="ds-cb"><input type="checkbox" aria-label="Select all creators" ${allOn?'checked':''} onchange="plSelAll(this.checked,'${ids.join(',')}')"></th><th>Creator</th><th class="ds-num">Followers</th><th>Tier</th><th>Stage</th><th class="pl-fit-th">Fit for campaign</th><th>Content fit</th><th class="ds-num">Creator cost</th><th>Tags</th><th>Actions</th></tr></thead>
     <tbody>${rows.map((c,i)=>{ const on=sel.includes(c.id); return `<tr class="${on?'is-selected':''}"><td class="ds-cb"><input type="checkbox" aria-label="Select ${esc(c.name)}" ${on?'checked':''} onchange="plSelToggle('${c.id}',this.checked)"></td><td>${dsPerson(c,'openMyQuick')}</td><td class="ds-num">${fmt(c.followers)}</td><td>${tierTag(c.tier)}</td>
       <td><select class="ds-select" aria-label="Stage for ${esc(c.name)}" onchange="setShortlist('${p.id}','${c.id}',this.value)"><option ${isShort(c.id)?'':'selected'}>Considering</option><option ${isShort(c.id)?'selected':''}>Shortlisted</option></select></td>
       <td>${fitOf(i)}/100 ${i%2?dsBadge('Weak fit','warn'):dsBadge('Good fit','success')}</td><td>${contentFitOf(i)}/100</td><td class="ds-num">${plCostCell(p,c)}</td><td>${tagCellHTML(c.id)}</td>
-      <td><div class="crm-row-acts" style="display:flex;gap:6px;align-items:center;justify-content:flex-end;flex-wrap:nowrap;white-space:nowrap">${crm?crmRowActionHTML(p,c):''}<button class="ds-btn ds-btn--outline ds-btn--sm" onclick="openMyQuick('${c.id}')">Quick view</button>${plRowMenu(p,c)}</div></td></tr>`; }).join('')||'<tr><td colspan="9" class="ds-empty">No creators match this view.</td></tr>'}</tbody></table></div>`;
+      <td><div class="crm-row-acts" style="display:flex;gap:6px;align-items:center;justify-content:flex-end;flex-wrap:nowrap;white-space:nowrap"><button class="ds-btn ds-btn--outline ds-btn--sm" onclick="openMyQuick('${c.id}')">Quick view</button>${plRowMenu(p,c)}</div></td></tr>`; }).join('')||'<tr><td colspan="9" class="ds-empty">No creators match this view.</td></tr>'}</tbody></table></div>`;
   }
   return `<div class="ds-page">
-    <div class="crumb"><button class="link" onclick="${crm?"crmGo('crm-shortlists')":"setPage('shortlist')"}">${crm?'CRM / Shortlists':'Campaign plan'}</button> / ${esc(p.name)}</div>
+    <div class="crumb"><button class="link" onclick="setPage('shortlist')">Campaign plan</button> / ${esc(p.name)}</div>
     <header class="cdh">
       <div class="cdh-top">
-        <button class="ds-dh-back" aria-label="Back to Campaign plan" onclick="${crm?"crmGo('crm-shortlists')":"setPage('shortlist')"}">${dsBackSvg}</button>
+        <button class="ds-dh-back" aria-label="Back to Campaign plan" onclick="setPage('shortlist')">${dsBackSvg}</button>
         ${dsMedia(p.id)}
         <div class="cdh-main">
           <div class="cdh-title"><h1>${esc(p.name)}</h1><span class="pl-stage-pill pl-stage--${stageSlug(st)}">${esc(st)}</span>${p.objective?`<span class="cdh-chip">${esc(p.objective)}</span>`:''}</div>
@@ -7302,7 +6977,6 @@ function planDetailHTML(){
       </div>
       <div class="cdh-tabs">${dsTabsFor('pTab',[['overview',`All creators (${p.creators.length})`],['brief','Brief'],['outcome','Expected outcome']],tab)}</div>
     </header>
-    ${crm?crmBudgetHTML(p)+planVsActualHTML(p,CAMP_LIST.find(c=>c.crm&&c.crm.planId===p.id)||null):''}
     ${body}
   </div>${S.addOpen&&S.addPlan?addCreatorsHTML():''}`;
 }
@@ -9880,7 +9554,7 @@ function confirmReset(){ dlg('Reset demo data?','This restores the sample datase
 
 
 /* ── Deeplinks: #/<page>[/<id>][?tab=<n|key>&post=<id>] ── */
-const ROUTE_PAGES=['discover','creators','shortlist','dashboard','campaigns','campaign','plan','settings','ia','requirements'];
+const ROUTE_PAGES=['discover','creators','shortlist','dashboard','campaigns','campaign','plan','settings'];
 function syncHash(){
   if(typeof S==='undefined') return;
   const p=S.page; let id='';

@@ -20,7 +20,7 @@
 #main .link{color:var(--primary);font-weight:500}
 
 /* ---------- segmented controls ---------- */
-#main .seg{padding:2px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--slate-100);box-shadow:none}
+#main .seg{padding:3px;border:0;border-radius:var(--r-md);background:var(--slate-100);box-shadow:none}
 #main .seg button{height:28px;border-radius:var(--r-sm);color:var(--slate-600);font-weight:500}
 #main .seg button.on{background:#fff;color:var(--slate-900);box-shadow:var(--shadow-xs)}
 #main .seg .count{color:var(--slate-500);background:transparent}
@@ -170,4 +170,30 @@
 }
 @layer area{
 #main .card.verdict{padding:0}
+}
+@layer area{
+/* dialogs/drawers opened from the profile: inline MK_CSS is unlayered, so !important is required */
+.modal.mk .modal-foot .btn{background:var(--background)!important;border:1px solid var(--input)!important;color:var(--slate-900)!important;height:36px!important;font-size:14px!important;font-weight:500!important;min-width:0!important;padding:0 16px!important;border-radius:var(--r-md)!important}
+.modal.mk .modal-foot .btn:hover{background:var(--slate-50)!important}
+.modal.mk .modal-foot .btn.primary{background:var(--primary)!important;border-color:var(--primary)!important;color:var(--primary-foreground)!important}
+.modal.mk .modal-foot .btn.primary:hover{background:var(--primary-hover)!important}
+.modal.mk .mk-body{display:flex;flex-direction:column;gap:8px}
+.modal.mk .mk-body .field.full{width:100%}
+#main .q-btn,#layer .q-btn{justify-content:space-between;text-align:left}
+#layer .q-btn{width:100%}
+#main .signals-title{margin-bottom:8px}
+#main .section-head{margin-bottom:8px}
+}
+@layer area{
+#main .toolbar .sep{display:none}
+}
+@layer area{
+.ds-dh-tabrow{display:flex;align-items:center;gap:16px;min-width:0}
+.ds-dh-tabs{flex:1 1 auto;min-width:0;overflow-x:auto;scrollbar-width:none;display:flex}
+.ds-dh-tabs::-webkit-scrollbar{display:none}
+.ds-dh-tabs .tab{flex:none;padding:0 12px;white-space:nowrap}
+.ds-viewseg{flex:none}
+}
+@layer area{
+@media (max-width:1200px){.ds-dh-tabs .tab{padding:0 8px;font-size:13px}}
 }

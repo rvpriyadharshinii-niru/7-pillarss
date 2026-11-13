@@ -11,13 +11,10 @@
     <div class="rail-spacer"></div>
     <div class="rail-foot">
       <div class="rail-foot-item">
-        <button class="rail-foot-btn rail-status" id="reqStatusBtn" type="button" aria-label="Requirements and coming soon" title="Requirements" onclick="railPop('reqPop')">
+        <button class="rail-foot-btn rail-status" id="reqStatusBtn" type="button" aria-label="Requirements" title="Requirements" onclick="railPop('reqPop')">
           <svg class="rail-ring" viewBox="0 0 24 24" aria-hidden="true"><circle class="rail-ring-track" cx="12" cy="12" r="9"/><circle id="reqRing" class="rail-ring-fill" cx="12" cy="12" r="9" pathLength="100" stroke-dasharray="0 100"/></svg>
         </button>
-        <div class="rail-pop rail-pop--req" id="reqPop" role="dialog" aria-label="Requirements and coming soon">
-          <div class="rp-tabs rq-ov-tabs">
-            <div class="rp-tabwrap"><button class="alert-tab on" type="button" data-t="req" onclick="reqOvTab('req')">Requirement</button><button class="alert-tab" type="button" data-t="soon" onclick="reqOvTab('soon')">Coming soon</button></div>
-          </div>
+        <div class="rail-pop rail-pop--req" id="reqPop" role="dialog" aria-label="Requirements">
           <div class="rq-ov-body" id="reqOvBody"></div>
         </div>
     </div>

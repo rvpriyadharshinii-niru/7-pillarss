@@ -95,7 +95,7 @@
   /* semantic tokens (shadcn naming) */
   --background:#fff; --foreground:var(--slate-900);
   --card:#fff; --card-foreground:var(--slate-900);
-  --muted:var(--slate-100); --muted-foreground:var(--slate-500);
+  --muted-surface:var(--slate-100); --muted-foreground:var(--slate-500);
   --border:var(--slate-200); --input:var(--slate-200); --ring:var(--blue-500);
   --primary:var(--blue-600); --primary-hover:var(--blue-700); --primary-foreground:#fff; --primary-soft:var(--blue-50);
   --secondary:var(--slate-100); --accent:var(--slate-100);
