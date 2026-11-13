@@ -292,6 +292,7 @@
 }
 
 @layer area{
+.ac-code{width:auto;min-width:28px;padding:0 6px}
 .ac-gd.el.leaf{width:30px}
 .ac-gd.el.leaf::after{width:29px}
 .ac-card .ac-bar--top>.ac-spacer{order:2}

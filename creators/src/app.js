@@ -458,9 +458,9 @@ const CAMP_QA=`<style class="camp-qa">@layer legacy{
 .ds-page .cp-table .ds-sticky-l2{min-width:240px}
 .ds-page .tv-m3 *{white-space:normal!important;overflow:visible!important;text-overflow:clip!important}
 .ds-page .pl-hero-i b{white-space:normal!important;overflow:visible!important}
-.ds-table-meta,.ds-caption,.ds-page-desc,.ds-note,.cdh-meta,.ct-link,.ct-muted,.dk-ov-l,.dw-s,.tl-meta,.ds-page small,.ds-page p{color:#1e40af}
+.ds-table-meta,.ds-caption,.ds-page-desc,.ds-note,.cdh-meta,.ct-link,.ct-muted,.dk-ov-l,.dw-s,.tl-meta,.ds-page small,.ds-page p{color:#64748b}
 .my-th,.dw-dots,.ds-page summary.ds-btn{color:#0f172a}
-[style*="6b7280"],[style*="9ca3af"],[style*="4b5563"],[style*="107, 114, 128"],[style*="156, 163, 175"]{color:#1e40af}
+[style*="6b7280"],[style*="9ca3af"],[style*="4b5563"],[style*="107, 114, 128"],[style*="156, 163, 175"]{color:#64748b}
 .ds-namebtn{white-space:normal!important;text-align:left;height:auto!important;min-height:24px;line-height:1.35;overflow-wrap:anywhere}
 .ds-page small,.ds-page .dk-ov-l,.ds-page .dw-s,.ds-page .tl-meta{white-space:normal!important;overflow-wrap:anywhere}
 .ds-page button.link{min-height:24px;display:inline-flex;align-items:center}
@@ -3072,7 +3072,7 @@ function collectionToggle(id,on){const a=new Set(S.collectionSelected||[]);on?a.
 function collectionCopyDialog(cid){colBoot();const ids=S.collectionSelected||[];if(!ids.length)return toast('Select creators first');const others=CREATOR_COLLECTIONS.filter(c=>c.id!==cid);if(!others.length)return toast('Create another collection first');dlg('Add selected to another collection',`${ids.length} selected creators will be added to the collection you choose. They stay in this collection.`,`<div class="ds-form"><label class="ds-field"><span>Collection</span><select id="colCopyTarget">${others.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></label></div>`,`<button class="ds-btn ds-btn--outline" onclick="closeLayer()">Cancel</button><button class="ds-btn ds-btn--primary" onclick="collectionCopyDo()">Add to collection</button>`);}
 function collectionCopyDo(){colBoot();const t=colOf(document.getElementById('colCopyTarget')?.value);const ids=S.collectionSelected||[];if(!t||!ids.length)return;ids.forEach(id=>{if(!t.creatorIds.includes(id))t.creatorIds.push(id);});colSave();closeLayer();paintBody();toast(`${ids.length} creators added to ${t.name}`);}
 const TIER_ORDER=['Nano','Micro','Macro','Mega'];
-const TIER_ABBR={Nano:'Na',Micro:'Mi',Macro:'Ma',Mega:'Me'};
+const TIER_ABBR={Nano:'Nano',Micro:'Micro',Macro:'Macro',Mega:'Mega'};
 const TIER_BAR={Nano:'#0369a1',Micro:'#1d4ed8',Macro:'#6d28d9',Mega:'#d97706'};
 const NOTE_KEY='adam_collection_notes_v1';
 const NOTE_DEFAULTS={

@@ -30,15 +30,18 @@ async function walk(B, seed) {
           const txt = TEXTS[Math.floor(rnd() * TEXTS.length)];
           desc = 'click:' + key + '|' + txt.slice(0, 8);
           if (!kn.includes(key)) { res.diff = { step: i, desc, kind: 'key-missing-in-new', keysOnlyOrig: ko.filter(k => !kn.includes(k)).slice(0, 5), keysOnlyNew: kn.filter(k => !ko.includes(k)).slice(0, 5) }; break; }
-          for (const w of ['orig', 'neu']) {
-            const loc = pg[w].locator('[data-cz="' + key.replace(/"/g, '\\"') + '"]').first();
-            const info = await loc.evaluate(e => ({ tag: e.tagName, type: e.type })).catch(() => null);
-            if (!info) continue;
+          const locs = {}, infos = {};
+          for (const w of ['orig', 'neu']) { locs[w] = pg[w].locator('[data-cz="' + key.replace(/"/g, '\\"') + '"]').first(); infos[w] = await locs[w].evaluate(e => ({ tag: e.tagName, type: e.type })).catch(() => null); }
+          const isTyping = i0 => i0 && (i0.tag === 'TEXTAREA' || (i0.tag === 'INPUT' && ['text', 'search', '', 'email', 'url', 'number', 'date'].includes(i0.type)));
+          // dry-run: only act if the element is genuinely actionable in BOTH builds (no force-click through overlays)
+          for (const w of ['orig', 'neu']) { ok[w] = 'ok'; if (!infos[w]) { ok[w] = 'gone'; continue; } if (infos[w].tag !== 'SELECT' && !isTyping(infos[w])) { try { await locs[w].click({ trial: true, timeout: 800 }); } catch (e) { ok[w] = 'blocked'; } } }
+          if (ok.orig !== ok.neu) { (res.noise = res.noise || []).push({ step: i, desc, ok }); desc += ' [SKIPPED actionable-mismatch ' + JSON.stringify(ok) + ']'; ok = {}; }
+          else if (ok.orig === 'ok') for (const w of ['orig', 'neu']) {
+            const loc = locs[w], info = infos[w];
             try {
-              if (info.tag === 'SELECT') { const vals = await loc.evaluate(e => [...e.options].map(o => o.value)); await loc.selectOption(vals[Math.floor(rnd() * 0 + (seed + i) % vals.length)], { timeout: 1000 }); }
-              else if (info.tag === 'TEXTAREA' || (info.tag === 'INPUT' && ['text', 'search', '', 'email', 'url', 'number'].includes(info.type))) await loc.fill(info.type === 'number' ? (/^-?[\d.e]+$/.test(txt) ? txt : '5') : txt, { timeout: 1000 });
-              else if (info.tag === 'INPUT' && info.type === 'date') await loc.fill('2026-11-20', { timeout: 1000 }).catch(() => {});
-              else await loc.click({ timeout: 1000, force: true, noWaitAfter: true });
+              if (info.tag === 'SELECT') { const vals = await loc.evaluate(e => [...e.options].map(o => o.value)); await loc.selectOption(vals[(seed + i) % vals.length], { timeout: 1000 }); }
+              else if (isTyping(info)) { if (info.type === 'date') await loc.fill('2026-11-20', { timeout: 1000 }).catch(() => {}); else await loc.fill(info.type === 'number' ? (/^-?[\d.e]+$/.test(txt) ? txt : '5') : txt, { timeout: 1000 }); }
+              else await loc.click({ timeout: 1000, noWaitAfter: true });
             } catch (e) { ok[w] = 'err'; }
             await pg[w].mouse.move(0, 0);
           }
@@ -52,14 +55,14 @@ async function walk(B, seed) {
       if (bad.length) { res.diff = { step: i, desc, kind: 'snapshot', fields: bad.map(f => ['main', 'layer', 'header'].includes(f) ? { f, ...L.wordDiff(String(so[f]), String(sn[f])) } : { f, o: so[f], n: sn[f] }) }; break; }
     }
   } catch (e) { res.diff = res.diff || { kind: 'exception', msg: e.message.slice(0, 200) }; }
-  res.log = log; res.errs = { orig: pg.orig.__errs.slice(0, 5), neu: pg.neu.__errs.slice(0, 5) };
+  res.log = log; res.noise = res.noise || []; res.errs = { orig: pg.orig.__errs.slice(0, 5), neu: pg.neu.__errs.slice(0, 5) };
   for (const w of ['orig', 'neu']) await pg[w].__ctx.close().catch(() => {});
   return res;
 }
 (async () => {
   await L.withBrowser(async B => {
     const seeds = []; for (let s = sf; s <= st; s++) seeds.push(s);
-    const out = await L.pool(seeds, 2, async s => { const r = await walk(B, s); console.log('seed', s, 'steps', r.steps, r.diff ? 'DIFF ' + JSON.stringify(r.diff).slice(0, 500) : 'ok', (r.errs.orig.length || r.errs.neu.length) ? 'ERRS ' + JSON.stringify(r.errs).slice(0, 300) : ''); return r; });
+    const out = await L.pool(seeds, 2, async s => { const r = await walk(B, s); console.log('seed', s, 'steps', r.steps, r.diff ? 'DIFF ' + JSON.stringify(r.diff).slice(0, 500) : 'ok', (r.noise.length ? 'NOISE' + r.noise.length + ' ' : '') + ((r.errs.orig.length || r.errs.neu.length) ? 'ERRS ' + JSON.stringify(r.errs).slice(0, 300) : '')); return r; });
     fs.writeFileSync(`/tmp/claude-0/fuzz-${sf}-${st}.json`, JSON.stringify(out));
   });
 })();
