@@ -1,0 +1,145 @@
+/* ════════════════════════════════════════════════════════════════════════════
+   DESIGN SYSTEM — component layer (shadcn/ui-style: slate neutrals, blue primary, Inter)
+   Lives in @layer ds, which beats @layer legacy regardless of selector specificity.
+   Rules here own VISUAL properties only (colour, border, radius, shadow, type).
+   Layout (grid/flex/positioning) stays in legacy.css.
+   Tokens: tokens.css (generated). Registry: ../docs/design-system/REGISTRY.md
+   ════════════════════════════════════════════════════════════════════════════ */
+@layer ds {
+
+/* ── Base ───────────────────────────────────────────────────────────────── */
+html,body{font-family:var(--font)}
+body{font-size:14px;line-height:1.5;color:var(--foreground);background:var(--canvas);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+button,input,select,textarea{font-family:inherit}
+h1,h2,h3,h4{font-family:var(--font);color:var(--foreground);font-weight:600;letter-spacing:-.015em}
+a{color:var(--primary)}
+a:hover{text-decoration:underline}
+:focus-visible{outline:2px solid var(--ring);outline-offset:2px}
+::selection{background:var(--blue-100)}
+.num,.ds-num{font-variant-numeric:tabular-nums}
+
+/* ── Typography roles ───────────────────────────────────────────────────── */
+.ds-page-title{font-size:24px;font-weight:600;letter-spacing:-.025em;line-height:1.2;color:var(--foreground)}
+.ds-page-desc,.ds-caption,.muted{color:var(--muted-foreground)}
+.ds-page-desc{font-size:14px}
+.ds-section-title,.ds-table-title,.section-head h2,.card-h h3{font-size:16px;font-weight:600;letter-spacing:-.01em;color:var(--foreground)}
+.ds-label,.kpi-label,.ds-ov-label,.eyebrow{font-size:12px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--muted-foreground)}
+.ds-value,.kpi-value,.ds-ov-val{font-size:24px;font-weight:600;letter-spacing:-.02em;color:var(--foreground);font-variant-numeric:tabular-nums}
+.ds-caption,.ds-table-meta,.kpi-sub{font-size:12px}
+.ds-strong,strong,b{font-weight:600}
+
+/* ── Button ─────────────────────────────────────────────────────────────── */
+.ds-btn,.btn,.ac-btn,.ds-dh-btn,.pl-bulk-btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;height:36px;padding:0 14px;
+  border-radius:var(--r-md);border:1px solid var(--border);background:#fff;color:var(--foreground);
+  font-size:14px;font-weight:500;line-height:1;white-space:nowrap;box-shadow:var(--shadow-xs);
+  transition:background-color .15s,border-color .15s,color .15s,box-shadow .15s}
+.ds-btn:hover,.btn:hover,.ac-btn:hover,.ds-dh-btn:hover,.pl-bulk-btn:hover{background:var(--slate-50);border-color:var(--slate-300);text-decoration:none}
+.ds-btn--sm,.btn.sm,.ac-btn.sm{height:32px;padding:0 12px;font-size:13px}
+.ds-btn svg,.btn svg,.ac-btn svg{width:16px;height:16px;flex:none}
+.ds-btn--sm svg,.btn.sm svg{width:14px;height:14px}
+.ds-btn--primary,.btn.primary,.ac-btn--primary,.ds-dh-btn--primary{background:var(--primary);border-color:var(--primary);color:var(--primary-foreground)}
+.ds-btn--primary:hover,.btn.primary:hover,.ac-btn--primary:hover,.ds-dh-btn--primary:hover{background:var(--primary-hover);border-color:var(--primary-hover)}
+.ds-btn--outline{background:#fff;border-color:var(--border);color:var(--foreground)}
+.ds-btn--outline:hover{background:var(--slate-50);border-color:var(--slate-300);color:var(--foreground)}
+.ds-btn--ghost,.btn.ghost{background:transparent;border-color:transparent;box-shadow:none;color:var(--slate-600)}
+.ds-btn--ghost:hover,.btn.ghost:hover{background:var(--slate-100);border-color:transparent;color:var(--foreground)}
+.ds-btn--danger{background:#fff;border-color:var(--red-200);color:var(--red-600)}
+.ds-btn--danger:hover{background:var(--red-50);border-color:var(--red-300)}
+.ds-btn--icon,.ds-iconbtn,.ds-icon-btn,.icon-btn{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;padding:0;border-radius:var(--r-md);border:1px solid var(--border);background:#fff;color:var(--slate-600);box-shadow:var(--shadow-xs)}
+.ds-btn--icon:hover,.ds-iconbtn:hover,.ds-icon-btn:hover,.icon-btn:hover{background:var(--slate-50);color:var(--foreground)}
+.ds-btn[disabled],.btn[disabled],.ds-btn.is-disabled{opacity:.5;pointer-events:none}
+
+/* ── Text input / select / field ────────────────────────────────────────── */
+.ds-input,.ds-select,.ac-input,.nl-input,.ds-field input,.ds-field select,.ds-field textarea,.field input,.field select,.field textarea{
+  height:36px;border:1px solid var(--input);border-radius:var(--r-md);background:#fff;color:var(--foreground);
+  font-size:14px;box-shadow:var(--shadow-xs);transition:border-color .15s,box-shadow .15s}
+.ds-field textarea,.field textarea{height:auto}
+.ds-input::placeholder,.ac-input::placeholder,.nl-input::placeholder,.ds-field input::placeholder,.ds-field textarea::placeholder{color:var(--slate-400)}
+.ds-input:focus,.ds-select:focus,.ac-input:focus,.nl-input:focus,.ds-field input:focus,.ds-field select:focus,.ds-field textarea:focus,.field input:focus,.field select:focus{
+  outline:none;border-color:var(--ring);box-shadow:0 0 0 3px color-mix(in srgb,var(--ring) 22%,transparent)}
+.ds-input-icon{border:1px solid var(--input);border-radius:var(--r-md);background:#fff;box-shadow:var(--shadow-xs);color:var(--slate-500)}
+.ds-input-icon:focus-within{border-color:var(--ring);box-shadow:0 0 0 3px color-mix(in srgb,var(--ring) 22%,transparent)}
+.ds-input-icon input{border:0;box-shadow:none;background:transparent;height:34px}
+.ds-input-icon input:focus{box-shadow:none}
+.ds-label,.ds-field>label,.field>label{font-size:13px;font-weight:500;color:var(--foreground)}
+.ds-cb,input[type=checkbox]{accent-color:var(--primary)}
+
+/* ── Filter pill / dropdown trigger ─────────────────────────────────────── */
+.ds-filter,.ds-select{border:1px solid var(--border);border-radius:var(--r-md);background:#fff;color:var(--foreground);font-weight:500;font-size:13px;box-shadow:var(--shadow-xs)}
+.ds-filter:hover{background:var(--slate-50)}
+.ds-filter.on,.ds-filter.is-on,.ds-filter[aria-expanded=true]{border-color:var(--primary);background:var(--primary-soft);color:var(--blue-700)}
+.ds-filter-x{color:var(--slate-400)}
+
+/* ── Badge / chip ───────────────────────────────────────────────────────── */
+.ds-chip,.chip,.ds-dh-chip,.ds-beta,.ds-count,.ds-hcount{
+  display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:var(--r-sm);border:1px solid var(--border);
+  background:var(--slate-50);color:var(--slate-700);font-size:12px;font-weight:500;line-height:1.4;white-space:nowrap}
+.ds-beta{background:var(--blue-50);border-color:var(--blue-200);color:var(--blue-700);text-transform:uppercase;letter-spacing:.04em;font-size:10.5px;font-weight:600}
+.ds-chip--ok,.ds-badge--ok,.ds-chip--good{background:var(--green-50);border-color:var(--green-200);color:var(--green-700)}
+.ds-chip--warn,.ds-badge--warn{background:var(--amber-50);border-color:var(--amber-200);color:var(--amber-700)}
+.ds-chip--bad,.ds-badge--bad,.ds-chip--danger{background:var(--red-50);border-color:var(--red-200);color:var(--red-700)}
+.ds-chip--info,.ds-badge--info,.ds-chip--blue{background:var(--blue-50);border-color:var(--blue-200);color:var(--blue-700)}
+.ds-chip--mute,.ds-badge--mute,.ds-chip--grey{background:var(--slate-100);border-color:var(--slate-200);color:var(--slate-600)}
+.ds-dot{border-radius:999px}
+
+/* ── Segmented control ──────────────────────────────────────────────────── */
+.ds-seg,.ds-viewseg,.seg{display:inline-flex;align-items:center;gap:2px;padding:3px;border-radius:var(--r-md);background:var(--slate-100);border:0}
+.ds-seg button,.ds-viewseg button,.seg button{height:28px;padding:0 12px;border:0;border-radius:var(--r-sm);background:transparent;color:var(--slate-600);font-size:13px;font-weight:500;box-shadow:none}
+.ds-seg button:hover,.ds-viewseg button:hover,.seg button:hover{color:var(--foreground);background:transparent}
+.ds-seg button.on,.ds-seg button.is-on,.ds-seg button[aria-pressed=true],.ds-seg button[aria-selected=true],
+.ds-viewseg button.on,.ds-viewseg button.is-on,.ds-viewseg button[aria-pressed=true],
+.seg button.on,.seg button[aria-selected=true]{background:#fff;color:var(--foreground);box-shadow:var(--shadow-sm)}
+
+/* ── Tabs (underline) ───────────────────────────────────────────────────── */
+.ds-tabs,.ds-tabrow,.ds-dh-tabs,.ds-dh-tabrow{border-bottom:1px solid var(--border);background:transparent}
+.ds-tabs button,.ds-tabrow button,.ds-dh-tabs button,.ds-tabs a,.ds-tabrow a,.ds-dh-tabs a{
+  position:relative;height:40px;padding:0 14px;border:0;background:transparent;color:var(--muted-foreground);font-size:14px;font-weight:500;border-radius:0;box-shadow:none}
+.ds-tabs button:hover,.ds-tabrow button:hover,.ds-dh-tabs button:hover{color:var(--foreground);background:transparent}
+.ds-tabs button.on,.ds-tabs button.is-on,.ds-tabs button[aria-selected=true],
+.ds-tabrow button.on,.ds-tabrow button.is-on,.ds-tabrow button[aria-selected=true],
+.ds-dh-tabs button.on,.ds-dh-tabs button.is-on,.ds-dh-tabs button[aria-selected=true]{color:var(--foreground);box-shadow:inset 0 -2px 0 var(--primary)}
+
+/* ── Card / panel ───────────────────────────────────────────────────────── */
+.ds-card,.card,.crm-card,.ds-tile,.ds-overview,.ds-callout,.ds-plan,.ds-cc,.rail-card{
+  background:#fff;border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xs);color:var(--card-foreground)}
+.ds-overview{background:#fff}
+.ds-note{border:1px solid var(--blue-200);background:var(--blue-50);border-radius:var(--r-md);color:var(--blue-800)}
+.ds-note--warn{border-color:var(--amber-200);background:var(--amber-50);color:var(--amber-800)}
+.ds-empty{color:var(--muted-foreground)}
+
+/* ── Table ──────────────────────────────────────────────────────────────── */
+.ds-table-wrap{background:#fff;border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xs)}
+.ds-table{border-collapse:separate;border-spacing:0;font-size:13.5px;color:var(--foreground)}
+.ds-table th{background:var(--slate-50);color:var(--muted-foreground);font-size:12px;font-weight:500;text-transform:none;letter-spacing:0;border-bottom:1px solid var(--border);border-right:0}
+.ds-table td{border-bottom:1px solid var(--slate-100);border-right:0;color:var(--foreground)}
+.ds-table tbody tr:last-child td{border-bottom:0}
+.ds-table tbody tr:hover td{background:var(--slate-50)}
+.ds-table th svg{color:var(--slate-400)}
+.ds-namebtn{color:var(--foreground);font-weight:500}
+.ds-namebtn:hover{color:var(--primary);text-decoration:none}
+.ds-pager button,.ds-pager-nav button,.ds-pg{border:1px solid var(--border);background:#fff;border-radius:var(--r-md);color:var(--slate-600)}
+.ds-pg.on,.ds-pager button.on{background:var(--primary);border-color:var(--primary);color:#fff}
+
+/* ── Menu / popover ─────────────────────────────────────────────────────── */
+.ds-more-menu,.ac-pop,.menu,.popover{background:#fff;border:1px solid var(--border);border-radius:var(--r-md);box-shadow:var(--shadow-md)}
+.ds-more-menu button:hover,.menu button:hover{background:var(--slate-100)}
+
+/* ── Dialog / drawer ────────────────────────────────────────────────────── */
+.modal,.ds-dlg,.ds-drawer{background:#fff;border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-lg)}
+.ds-drawer{border-radius:0;border-width:0 0 0 1px}
+.ds-drawer-head,.ds-drawer-foot{border-color:var(--border)}
+.scrim,.overlay,.modal-bg{background:color-mix(in srgb,var(--slate-950) 45%,transparent)}
+
+/* ── Avatar / progress ──────────────────────────────────────────────────── */
+.ds-progress{background:var(--slate-100);border-radius:999px}
+.ds-progress>i,.ds-progress>span,.ds-bar-fill{background:var(--primary);border-radius:999px}
+
+/* ── Floating action (Ask Adam) ─────────────────────────────────────────── */
+.fab{background:var(--primary);color:#fff;border:0;border-radius:999px;box-shadow:var(--shadow-lg);font-weight:500}
+.fab:hover{background:var(--primary-hover)}
+
+/* ── Toast ──────────────────────────────────────────────────────────────── */
+.toast{background:var(--slate-900);color:#fff;border-radius:var(--r-md);box-shadow:var(--shadow-lg);font-size:13px}
+
+}

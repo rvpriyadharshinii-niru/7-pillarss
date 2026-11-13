@@ -1,0 +1,101 @@
+<div class="shell">
+  <nav class="rail" aria-label="Main">
+    <button class="rail-item" type="button" aria-label="Home"><svg class="ico ico-lg" viewBox="0 0 24 24"><path d="M3 10l9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg><span>Home</span></button>
+    <button class="rail-item" type="button" data-mod="ci" aria-label="Competitor Intelligence" onclick="railGo('ci')"><svg class="ico ico-lg" viewBox="0 0 24 24"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></svg><span>Competitor<br>Intelligence</span></button>
+    <button class="rail-item" type="button" data-mod="sp" aria-label="Strategy and Planning" onclick="railGo('sp')"><svg class="ico ico-lg" viewBox="0 0 24 24"><path d="M12 2l8.66 5v10L12 22l-8.66-5V7z"/></svg><span>Strategy<br>&amp; Planning</span></button>
+    <button class="rail-item on" type="button" data-mod="creators" aria-label="Creators" aria-current="page" onclick="railGo('creators')"><svg class="ico ico-lg" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Creators</span><span class="dot"></span></button>
+    <button class="rail-item" type="button" data-mod="ap" aria-label="Ads Performance" onclick="railGo('ap')"><svg class="ico ico-lg" viewBox="0 0 24 24"><path d="M3 4h18v12H3z"/><path d="M8 20h8M12 16v4"/></svg><span>Ads<br>Performance</span></button>
+    <button class="rail-item" type="button" data-mod="bm" aria-label="Brand Management" onclick="railGo('bm')"><svg class="ico ico-lg" viewBox="0 0 24 24"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8z"/><circle cx="7" cy="7" r="1.5"/></svg><span>Brand<br>Management</span></button>
+    <button class="rail-item" type="button" data-mod="sl" aria-label="Social Listening" onclick="railGo('sl')"><svg class="ico ico-lg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>Social<br>Listening</span></button>
+    <div class="rail-spacer"></div>
+    <div class="rail-spacer"></div>
+    <div class="rail-foot">
+      <div class="rail-foot-item">
+        <button class="rail-foot-btn rail-status" id="reqStatusBtn" type="button" aria-label="Requirements and coming soon" title="Requirements" onclick="railPop('reqPop')">
+          <svg class="rail-ring" viewBox="0 0 24 24" aria-hidden="true"><circle class="rail-ring-track" cx="12" cy="12" r="9"/><circle id="reqRing" class="rail-ring-fill" cx="12" cy="12" r="9" pathLength="100" stroke-dasharray="0 100"/></svg>
+        </button>
+        <div class="rail-pop rail-pop--req" id="reqPop" role="dialog" aria-label="Requirements and coming soon">
+          <div class="rp-tabs rq-ov-tabs">
+            <div class="rp-tabwrap"><button class="alert-tab on" type="button" data-t="req" onclick="reqOvTab('req')">Requirement</button><button class="alert-tab" type="button" data-t="soon" onclick="reqOvTab('soon')">Coming soon</button></div>
+          </div>
+          <div class="rq-ov-body" id="reqOvBody"></div>
+        </div>
+    </div>
+    <div class="rail-foot-item">
+        <button class="rail-brand" type="button" aria-label="Switch brand" onclick="railPop('brandPop')"><span id="railBrand">PD</span></button>
+        <div class="rail-pop rail-pop--brand" id="brandPop" role="dialog" aria-label="Switch brand">
+          <div class="rp-head"><b>Switch Brand</b><span>
+            <button class="rp-ico" type="button" aria-label="Add brand" onclick="toast('Add brand (prototype)')"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+            <button class="rp-ico" type="button" aria-label="Brand settings" onclick="toast('Brand settings (prototype)')"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8" stroke-dasharray="3 3"/></svg></button>
+          </span></div>
+          <label class="rp-search"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input id="brandQ" placeholder="Search brands..." oninput="RAIL_BRAND_Q=this.value;railBrandList()"></label>
+          <div class="brand-list" id="brandList"></div>
+        </div>
+      </div>
+      <div class="rail-foot-item">
+        <button class="rail-foot-btn" type="button" aria-label="Alerts" onclick="railPop('alertPop')"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg></button>
+        <div class="rail-pop rail-pop--alert" id="alertPop" role="dialog" aria-label="Alerts">
+          <div class="rp-tabs">
+            <div class="rp-tabwrap"><button class="alert-tab on" type="button" onclick="alertTab(this)">All</button><button class="alert-tab" type="button" onclick="alertTab(this)">Unread</button></div>
+            <span class="rp-acts">
+              <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12l5 5L18 6"/><path d="M12 13l1 1 9-9"/></svg>
+              <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 6h8M16 6h4M4 12h2M10 12h10M4 18h10M18 18h2"/><circle cx="14" cy="6" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="18" r="2"/></svg>
+            </span>
+          </div>
+          <div class="alert-empty">
+            <span class="alert-ico"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5.1L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.7 4H7.3a2 2 0 0 0-1.8 1.1z"/></svg></span>
+            <b>No alerts yet</b>
+            <p>When an automation finds something worth knowing, it lands here.</p>
+            <button class="rp-btn" type="button" onclick="profGo('ph:Automations')">Manage automations</button>
+          </div>
+        </div>
+      </div>
+      <div class="rail-foot-item">
+        <button class="rail-foot-btn rail-user-btn" type="button" aria-label="Account" onclick="railPop('userPop')"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg></button>
+        <div class="rail-pop rail-pop--user" id="userPop" role="menu">
+          <div class="ru-head"><span class="ru-av"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg></span><div><b>Test User</b><small>test.creator@gmail.com</small></div></div>
+          <div class="ru-sep"></div>
+          <button class="ru-row" type="button" onclick="profGo('ph:Dashboard')"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Dashboard</span></button>
+          <div class="ru-sep"></div>
+          <button class="ru-row" type="button" onclick="profGo('ph:Active Tasks')"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M6 4l14 8-14 8z"/></svg><span>Active Tasks</span></button>
+          <button class="ru-row" type="button" onclick="profGo('ph:Media Library')"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 4v16M7 4v16M11 6l4 14M17 4v16"/></svg><span>Media Library</span></button>
+          <button class="ru-row" type="button" onclick="profGo('ph:Automations')"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="4" width="8" height="7" rx="1.5"/><rect x="13" y="13" width="8" height="7" rx="1.5"/><path d="M11 8h2v5h2"/></svg><span>Automations</span></button>
+          <button class="ru-row" type="button" onclick="profGo('ph:MCP')"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11l-9.2 9.2a5 5 0 0 1-7-7L14 4a3.5 3.5 0 0 1 5 5l-8.6 8.6a2 2 0 0 1-2.8-2.8L16 7"/></svg><span>MCP</span></button>
+          <button class="ru-row" type="button" onclick="profGo('settings')"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg><span>Settings</span></button>
+          <div class="ru-sep"></div>
+          <button class="ru-row ru-out" type="button" onclick="profLogout()"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg><span>Log out</span></button>
+        </div>
+      </div>
+    </div>
+
+  </nav>
+
+  <aside class="nav" aria-label="Creators navigation" data-mod="creators">
+    <div class="nav-title">Creators</div>
+    <div class="nav-exp">
+      <button class="nav-row nav-toggle" type="button" aria-expanded="true" onclick="const e=this.parentElement;e.classList.toggle('closed');this.setAttribute('aria-expanded',!e.classList.contains('closed'))"><svg class="ico ico-sm" viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M2 21v-1a6 6 0 0 1 6-6h2a6 6 0 0 1 6 6v1"/><path d="M16 4a4 4 0 0 1 0 8"/><path d="M22 21v-1a6 6 0 0 0-4-5.7"/></svg><span>Creator</span><svg class="ico ico-sm" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+      <div class="nav-children">
+      <a class="nav-row sub" href="#" data-page="discover" onclick="event.preventDefault();setPage('discover')"><span>Discover</span></a>
+      <a class="nav-row sub" href="#" data-page="creators" onclick="event.preventDefault();setPage('creators')"><span>My creators</span></a>
+      <a class="nav-row sub" href="#" data-page="collections" onclick="event.preventDefault();setPage('collections')"><span>Collections</span></a>
+      </div>
+    </div>
+    <div class="nav-exp">
+      <button class="nav-row nav-toggle" type="button" aria-expanded="true" onclick="const e=this.parentElement;e.classList.toggle('closed');this.setAttribute('aria-expanded',!e.classList.contains('closed'))"><svg class="ico ico-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg><span>Campaigns</span><svg class="ico ico-sm" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+      <div class="nav-children">
+        <a class="nav-row sub" href="#" data-page="dashboard" onclick="event.preventDefault();setPage('dashboard')"><span>Cumulative dashboard</span></a>
+        <a class="nav-row sub" href="#" data-page="campaigns" onclick="event.preventDefault();setPage('campaigns')"><span>My campaigns</span></a>
+        <a class="nav-row sub" href="#" data-page="tracker" onclick="event.preventDefault();setPage('tracker')"><span>Campaign tracker</span></a>
+      </div>
+    </div>
+  </aside>
+  <div class="app">
+    <div class="compact" id="compact"></div>
+    <header class="header" id="header"></header>
+    <main class="body" id="main"></main>
+  </div>
+</div>
+
+<button class="fab" type="button" id="askBtn"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg>Ask Adam</button>
+<div id="layer"></div>
+
